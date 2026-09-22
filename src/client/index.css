@@ -1,0 +1,35 @@
+/*
+ * Font first: @import must precede other statements to be valid CSS. Mono is
+ * loaded alongside Sans to match the FlyWise.html prototype, which uses IBM
+ * Plex Mono for all numeric/figure text (delay rates, counts, times).
+ */
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
+  line-height: 1.5;
+  /* Dark theme, ported from the prototype: native form controls (date/time
+     pickers, select popups) render with dark chrome instead of white. */
+  color-scheme: dark;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/*
+ * No flex centring here. The previous rule (`display: flex; place-items: center`)
+ * came from the Vite starter template and fought the full-width dashboard layout,
+ * vertically centring the whole page against its own min-height.
+ */
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background-color: #0B1B2B;
+  color: #EAF0F6;
+}

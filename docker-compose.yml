@@ -1,0 +1,92 @@
+# FlyWise - two containers, one URL.
+#   docker compose up -d --build   ->   http://localhost:8000
+#
+# SCOPE: this is a local development stack. The credentials below are literals
+# and both services are reachable from the host, which is fine on a laptop and
+# is not safe to expose. Nothing in the app authenticates its callers, so do not
+# publish these ports to an untrusted network. Before deploying anywhere shared,
+# move the passwords to secrets and put auth in front of the API.
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: flywise-mysql
+    environment:
+      MYSQL_ROOT_PASSWORD: root123
+      MYSQL_DATABASE: flywise
+      MYSQL_USER: flywise
+      MYSQL_PASSWORD: flywise123
+    ports:
+      # Published so host-side tooling (npm run db:migrate, npm run etl) can
+      # reach the database. The app container does not need this - it connects
+      # over the flywise network on 3306.
+      #
+      # 3307 on the host, not 3306, because a natively installed MySQL or MariaDB
+      # service commonly already owns 3306 on a developer machine. When that
+      # happens the host port silently answers from the wrong server and the
+      # symptom is an unrelated-looking auth error such as
+      # "unknown plugin auth_gssapi_client". Keep DB_PORT in .env at 3307 to match.
+      - "3307:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Mounted individually rather than as a directory, so load order is
+      # explicit and nothing shadows anything. These run alphabetically, and
+      # only on the first boot of an empty volume.
+      #
+      # These create the schema only. The schema_migrations bookkeeping table is
+      # owned by db/runner.ts, which creates it on demand and records real file
+      # checksums - so nothing here pre-seeds it with hardcoded values that
+      # would drift the moment a migration is edited.
+      - ./db/migrations/001_core_schema.sql:/docker-entrypoint-initdb.d/001_core_schema.sql:ro
+      - ./db/migrations/002_app_schema.sql:/docker-entrypoint-initdb.d/002_app_schema.sql:ro
+      - ./db/migrations/003_feature_aggregates.sql:/docker-entrypoint-initdb.d/003_feature_aggregates.sql:ro
+    command: --default-authentication-plugin=caching_sha2_password --skip-name-resolve
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      timeout: 20s
+      retries: 10
+    networks:
+      - flywise
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: flywise-app
+    environment:
+      # Must satisfy src/config/env.ts, which refuses to start otherwise.
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: flywise
+      DB_PASSWORD: flywise123
+      DB_NAME: flywise
+      DB_SSL: "false"
+      PORT: 8000
+      NODE_ENV: production
+    ports:
+      - "8000:8000"
+    depends_on:
+      mysql:
+        condition: service_healthy
+    healthcheck:
+      # Liveness only; /api/health deliberately does not touch the database.
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:8000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+    # No source bind mounts: the image must be self-contained so that it runs
+    # unchanged on another machine.
+    #
+    # A consequence worth knowing: flight_project_cleaned.csv is excluded by
+    # .dockerignore and not mounted, so `npm run etl` cannot run inside this
+    # container. Load data from the host against the published 3307 port.
+    networks:
+      - flywise
+
+volumes:
+  mysql_data:
+
+networks:
+  flywise:
+    driver: bridge
