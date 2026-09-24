@@ -22,7 +22,6 @@ build
 .gitignore
 
 # Docker
-Dockerfile
 docker-compose*.yml
 .dockerignore
 
@@ -49,3 +48,8 @@ temp
 
 # Large data files
 flight_project_cleaned.csv
+
+# Python artifacts (when FastAPI added)
+__pycache__
+*.pyc
+.pytest_cache

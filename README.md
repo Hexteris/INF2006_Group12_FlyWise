@@ -15,15 +15,18 @@ Delay means a departure 15 or more minutes behind schedule (`DepDel15`).
 ## Run it
 
 ```powershell
-docker compose up -d --build
+docker compose up mysql
 ```
 
-Then open <http://localhost:8000>. Two containers, one port: `flywise-mysql` and
-`flywise-app`. The app image builds the React client and serves it alongside the API from
-the same origin, so there is no CORS layer and no proxy in the production path.
+Starts MySQL only. The FastAPI backend is not yet containerized in this repository.
 
-On the first boot of an empty volume, MySQL runs the three migration files to create the
-schema. Loading flight data is a separate step, below.
+For frontend development:
+
+```powershell
+npm run dev
+```
+
+Then open <http://localhost:3000>. The Vite dev server proxies API requests to the backend (when running).
 
 ## What is implemented today
 
@@ -33,10 +36,10 @@ schema. Loading flight data is a separate step, below.
 | `GET /api/summary`, `/api/airlines`, `/api/airports/congestion`, `/api/airports`, `/api/airlines/list` | Working |
 | `POST /api/predict` | Working, backed by a baseline heuristic |
 | `GET /api/health`, `/api/health/db` | Working |
-| CSV loader and aggregate refresh (`npm run etl`, `npm run etl:aggregates`) | Working |
-| Migration runner (`npm run db:migrate`) with checksum immutability | Working |
-| Trained ML model | **Not built.** `src/ml/model.ts` is a documented seam holding a baseline heuristic |
-| Authentication and roles | **Not built.** `users` / `prediction_log` exist in migration 002 as the intended schema; no code reads them |
+| CSV loader and aggregate refresh (`npm run etl`, `npm run etl:aggregates`) | **Removed.** Now handled by FastAPI backend |
+| Migration runner (`npm run db:migrate`) with checksum immutability | **Removed.** Now handled by FastAPI backend (Alembic or SQL) |
+| Trained ML model | **Not built.** The backend will implement the prediction model |
+| Authentication and roles | **Not built.** Backend will implement auth as needed |
 | Weather, charts, watchlist, AWS deployment | **Not built** (phase 2) |
 
 > **Access control:** every endpoint is currently unauthenticated. This is fine for the
@@ -48,35 +51,22 @@ schema. Loading flight data is a separate step, below.
 Browser  http://localhost:8000
    |
    v
-flywise-app        Express, run with tsx
-                     /api/*              JSON API
-                     dist/client         built React app + SPA fallback
+FastAPI backend          Serves React client via StaticFiles
+   ├── /api/*            JSON API
+   └── /                 built React app (dist/client)
    |
    v
-flywise-mysql      MySQL 8, schema from db/migrations
+MySQL 8                  Historical aggregates and prediction data
 ```
 
-Flexibility is concentrated in three places, deliberately, so a change has one obvious home:
+**Frontend stack:** React 18 + Vite + Tailwind, TypeScript, eslint. The client expects a backend that implements the contract defined in `src/types.ts` (ApiEnvelope wrapper, same routes and shapes).
 
-- **`src/types.ts`** — the API contract. Every shape crossing HTTP is declared once here and
-  imported by the query layer, the model, the routes, and the client, so the two sides
-  cannot drift.
-- **`src/db/queries.ts`** — every SQL string. A schema change means editing this file only.
-  `DECIMAL` columns arrive from mysql2 as strings and are coerced to numbers here, and rows
-  are mapped to camelCase, so no raw column name escapes this module.
-- **`src/ml/model.ts`** — one `predict()` function. Replacing the model means replacing this
-  file and nothing else.
-
-**Stack:** React 18 + Vite + Tailwind, Express + TypeScript run through `tsx`, MySQL 8, zod
-for validation. There is no build step for the server: `tsx` strips types at run time, and
-`vite build` (esbuild) compiles the client without type-checking. Run `npm run type-check`
-in CI, because a type error cannot fail the image build.
+**Backend stack:** FastAPI (Python) with MySQL, to be added in a separate directory or repo. The frontend is abstracted so any backend can extend from there.
 
 ## Loading flight data
 
 `flight_project_cleaned.csv` is roughly 895 MB. It is gitignored and excluded from the
-Docker build context, so it is **not** present inside the container. Load it from the host
-against the published MySQL port:
+Docker build context. The FastAPI backend will implement its own ETL pipeline.
 
 ```powershell
 npm install

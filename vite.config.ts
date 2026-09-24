@@ -1,4 +1,3 @@
-/// <reference types="vitest" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react-swc';
 
@@ -12,15 +11,8 @@ import react from '@vitejs/plugin-react-swc';
 export default defineConfig({
   plugins: [react()],
 
-  test: {
-    globals: true,
-    // Every test is server-side (config, etl, db). There are no DOM tests, so
-    // there is no jsdom/happy-dom environment to configure.
-    environment: 'node',
-  },
-
   server: {
-    // Dev-only. In production src/server.ts serves the built client from the
+    // Dev-only. In production FastAPI serves the built client from the
     // same origin on port 8000, so this proxy is not in the production path.
     port: 3000,
     proxy: {
@@ -32,7 +24,7 @@ export default defineConfig({
   },
 
   build: {
-    // Must stay in step with CLIENT_DIR in src/server.ts.
+    // Must stay in step with the FastAPI StaticFiles mount point.
     outDir: 'dist/client',
     emptyOutDir: true,
   },
