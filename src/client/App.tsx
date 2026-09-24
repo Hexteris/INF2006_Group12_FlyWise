@@ -160,21 +160,6 @@ export default function App() {
         />
 
         <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <PredictionForm
-            airports={airports.data}
-            airlines={airlines.data}
-            onSubmit={handlePredict}
-            isLoading={isPredicting}
-            disabled={dimensionsLoading}
-          />
-          <PredictionPanel
-            result={prediction}
-            error={predictionError}
-            isLoading={isPredicting}
-          />
-        </div>
-
-        <div className="grid grid-cols-1 gap-8 lg:grid-cols-2">
           <DataTable
             title="Busiest routes"
             columns={routeColumns}
@@ -188,6 +173,21 @@ export default function App() {
             rows={congestion.data}
             rowKey={row => `${row.airportCode}-${row.depHour}`}
             emptyMessage={congestion.loading ? 'Loading…' : 'No congestion data for this airport'}
+          />
+        </div>
+
+        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+          <PredictionForm
+            airports={airports.data}
+            airlines={airlines.data}
+            onSubmit={handlePredict}
+            isLoading={isPredicting}
+            disabled={dimensionsLoading}
+          />
+          <PredictionPanel
+            result={prediction}
+            error={predictionError}
+            isLoading={isPredicting}
           />
         </div>
 
