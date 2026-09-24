@@ -9,7 +9,7 @@ const CAPABILITIES = [
   },
   {
     title: 'Single deployment',
-    body: 'One image serves the dashboard and the API; MySQL holds the aggregates.',
+    body: 'One container serves the dashboard and the API; MySQL holds the aggregates.',
   },
 ];
 

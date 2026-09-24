@@ -21,13 +21,5 @@ module.exports = {
     '@typescript-eslint/no-explicit-any': 'error',
     'no-console': 'off',
   },
-  overrides: [
-    {
-      // CLI entry points and tests legitimately call process.exit and log freely.
-      files: ['db/**/*.ts', 'src/etl/**/*.ts', 'tests/**/*.ts'],
-      rules: {
-        '@typescript-eslint/no-explicit-any': 'off',
-      },
-    },
-  ],
+
 };

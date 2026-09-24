@@ -19,12 +19,12 @@
     "skipLibCheck": true,
 
     // Type-checking only. Nothing in this project is compiled by tsc: the client
-    // is bundled by Vite and the server runs through tsx, both of which strip
-    // types with esbuild. Emitting here would only produce stale output in dist/.
+    // is bundled by Vite, which strips types with esbuild. Emitting here would
+    // only produce stale output in dist/.
     "noEmit": true,
 
-    "types": ["node", "vitest/globals"]
+    "types": ["node"]
   },
-  "include": ["src/**/*", "tests/**/*", "db/**/*", "vite.config.ts"],
+  "include": ["src/**/*", "vite.config.ts"],
   "exclude": ["node_modules", "dist", "data"]
 }

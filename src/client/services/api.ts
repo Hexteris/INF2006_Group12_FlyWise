@@ -1,211 +1,148 @@
-// API client for the FastAPI backend.
+// API client.
 //
-// React → Vite → FastAPI → MariaDB
+// The base URL is RELATIVE by design: the client and the API are served from the
+// same origin by FastAPI, so a hardcoded http://localhost:8000 would break the
+// moment the host or port changed. In dev, vite.config.ts proxies these routes
+// to port 8000 so this same code works unchanged from the Vite dev server.
 //
-// FastAPI endpoints do NOT use an /api prefix.
-// Vite proxies the endpoint paths below to FastAPI on port 8000.
-//
-// FastAPI returns JSON data directly, so there is no Express-style
-// ApiEnvelope to unwrap.
-
+// Response types come from src/types.ts, the same file the server builds them
+// from, so the two sides cannot drift.
 import type {
-  Airline,
-  Airport,
-  Route,
-  Flight,
-  FlightDetails,
-  AirlineAnalytics,
-  RouteAnalytics,
-  AirportAnalytics,
-  MonthlyDelayTrend,
-  HourlyDelayTrend,
-  DelayCause,
-  AirlineRouteAnalytics,
-  PredictionFeatures,
+  ApiEnvelope,
+  Summary,
+  RoutePerformanceRow,
+  CongestionRow,
+  DimRow,
   PredictionRequest,
   PredictionResult,
+  FlightSearchRow,
+  MonthlyTrendRow,
+  HourlyTrendRow,
+  DelayCauseRow,
+  LiveFlightRow,
 } from '../../types';
 
-const BASE = '';
+const BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
+type ApiRow = Record<string, unknown>;
 
-async function request<T>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<T> {
+/**
+ * Unwraps the ApiEnvelope so callers receive `T` directly and never have to
+ * check `success` themselves. A failed request throws, which is what lets
+ * useApiResource report an error message instead of rendering an empty table.
+ */
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  let envelope: ApiEnvelope<T>;
+
   const response = await fetch(`${BASE}${endpoint}`, {
-    headers: {
-      'Content-Type': 'application/json',
-      ...options.headers,
-    },
+    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
   });
 
-  let data: unknown;
-
   try {
-    data = await response.json();
+    envelope = (await response.json()) as ApiEnvelope<T>;
   } catch {
-    throw new Error(
-      `Unexpected non-JSON response (HTTP ${response.status})`
-    );
+    // A non-JSON body means something upstream answered instead of the API
+    // (a proxy error page, for example). Report the status rather than a
+    // confusing JSON parse error.
+    throw new Error(`Unexpected non-JSON response (HTTP ${response.status})`);
   }
 
   if (!response.ok) {
-    if (
-      typeof data === 'object' &&
-      data !== null &&
-      'detail' in data
-    ) {
-      throw new Error(String(data.detail));
-    }
-
-    throw new Error(
-      `Request failed: HTTP ${response.status}`
-    );
+    const error = 'error' in envelope && envelope.error ? envelope.error : `Request failed: HTTP ${response.status}`;
+    throw new Error(error);
+  }
+  if (!envelope.success) {
+    throw new Error(envelope.error);
   }
 
-  return data as T;
+  return envelope.data;
 }
 
-function query(
-  params: Record<string, string | number | undefined>
-): string {
+/** Reads older FastAPI routes that return rows directly rather than envelopes. */
+async function requestRaw<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const response = await fetch(`${BASE}${endpoint}`, {
+    headers: { 'Content-Type': 'application/json', ...options.headers },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: HTTP ${response.status}`);
+  }
+
+  return (await response.json()) as T;
+}
+
+/** Serialises defined, non-empty params into a query string. */
+function query(params: Record<string, string | number | undefined>): string {
   const entries = Object.entries(params)
-    .filter(
-      ([, value]) =>
-        value !== undefined &&
-        value !== ''
-    )
-    .map(
-      ([key, value]) =>
-        [key, String(value)] as [string, string]
-    );
+    .filter(([, value]) => value !== undefined && value !== '')
+    .map(([key, value]) => [key, String(value)]);
 
-  return entries.length > 0
-    ? `?${new URLSearchParams(entries).toString()}`
-    : '';
+  return entries.length > 0 ? `?${new URLSearchParams(entries).toString()}` : '';
 }
 
-/* =========================================================
-   Dropdown / Search APIs
-   ========================================================= */
+export const fetchSummary = () => request<Summary>('/summary');
 
-export const fetchAirlines = () =>
-  request<Airline[]>('/airlines');
+export const fetchRoutePerformance = (
+  params: { airlineId?: number; originId?: number; limit?: number } = {}
+) => request<RoutePerformanceRow[]>(`/airlines${query(params)}`);
 
-export const fetchAirports = () =>
-  request<Airport[]>('/airports');
+export const fetchCongestion = (params: { airportId?: number; limit?: number } = {}) =>
+  request<CongestionRow[]>(`/airports/congestion${query(params)}`);
+
+export const fetchAirports = () => request<DimRow[]>('/airports');
+
+export const fetchAirlines = () => request<DimRow[]>('/airlines/list');
+
+export const submitPrediction = (body: PredictionRequest) =>
+  request<PredictionResult>('/predict', { method: 'POST', body: JSON.stringify(body) });
+
+export const fetchLegacyAirlines = () => requestRaw<ApiRow[]>('/legacy/airlines');
+
+export const fetchLegacyAirports = () => requestRaw<ApiRow[]>('/legacy/airports');
 
 export const fetchRoutes = (origin: string) =>
-  request<Route[]>(
-    `/routes${query({ origin })}`
-  );
+  requestRaw<ApiRow[]>(`/routes${query({ origin })}`);
 
-/* =========================================================
-   Flight APIs
-   ========================================================= */
+export const searchFlights = (params: {
+  flight_date: string;
+  origin: string;
+  destination: string;
+}) => requestRaw<FlightSearchRow[]>(`/flights${query(params)}`);
 
-export const fetchFlights = (
-  flightDate: string,
-  origin: string,
-  destination: string
-) =>
-  request<Flight[]>(
-    `/flights${query({
-      flight_date: flightDate,
-      origin,
-      destination,
-    })}`
-  );
+export const fetchFlightDetails = (flightId: number) =>
+  requestRaw<ApiRow[]>(`/flights/${flightId}`);
 
-export const fetchFlightDetails = (
-  flightId: number
-) =>
-  request<FlightDetails[]>(
-    `/flights/${flightId}`
-  );
+export const fetchAirlineAnalytics = (airline: string) =>
+  requestRaw<ApiRow[]>(`/analytics/airline${query({ airline })}`);
 
-/* =========================================================
-   Analytics APIs
-   ========================================================= */
+export const fetchRouteAnalytics = (origin: string, destination: string) =>
+  requestRaw<ApiRow[]>(`/analytics/route${query({ origin, destination })}`);
 
-export const fetchAirlineAnalytics = (
-  airline: string
-) =>
-  request<AirlineAnalytics[]>(
-    `/analytics/airline${query({ airline })}`
-  );
-
-export const fetchRouteAnalytics = (
-  origin: string,
-  destination: string
-) =>
-  request<RouteAnalytics[]>(
-    `/analytics/route${query({
-      origin,
-      destination,
-    })}`
-  );
-
-export const fetchAirportAnalytics = (
-  airport: string
-) =>
-  request<AirportAnalytics[]>(
-    `/analytics/airport${query({ airport })}`
-  );
+export const fetchAirportAnalytics = (airport: string) =>
+  requestRaw<ApiRow[]>(`/analytics/airport${query({ airport })}`);
 
 export const fetchMonthlyDelayTrends = () =>
-  request<MonthlyDelayTrend[]>(
-    '/analytics/delay-trends/monthly'
-  );
+  requestRaw<MonthlyTrendRow[]>('/analytics/delay-trends/monthly');
 
 export const fetchHourlyDelayTrends = () =>
-  request<HourlyDelayTrend[]>(
-    '/analytics/delay-trends/hourly'
-  );
+  requestRaw<HourlyTrendRow[]>('/analytics/delay-trends/hourly');
 
 export const fetchDelayCauses = () =>
-  request<DelayCause[]>(
-    '/analytics/delay-causes'
-  );
+  requestRaw<DelayCauseRow[]>('/analytics/delay-causes');
 
 export const fetchAirlineRouteAnalytics = (
   airline: string,
   origin: string,
   destination: string
-) =>
-  request<AirlineRouteAnalytics[]>(
-    `/analytics/airline-route${query({
-      airline,
-      origin,
-      destination,
-    })}`
-  );
+) => requestRaw<ApiRow[]>(
+  `/analytics/airline-route${query({ airline, origin, destination })}`
+);
 
-/* =========================================================
-   Prediction APIs
-   ========================================================= */
+export const fetchPredictionData = (airline: string, origin: string, destination: string) =>
+  requestRaw<ApiRow[]>(`/prediction-data${query({ airline, origin, destination })}`);
 
-export const fetchPredictionData = (
-  airline: string,
-  origin: string,
-  destination: string
-) =>
-  request<PredictionFeatures[]>(
-    `/prediction-data${query({
-      airline,
-      origin,
-      destination,
-    })}`
-  );
-
-export const submitPrediction = (
-  body: PredictionRequest
-) =>
-  request<PredictionResult>(
-    '/predict',
-    {
-      method: 'POST',
-      body: JSON.stringify(body),
-    }
-  );
+export const fetchLiveFlights = (
+  airport: string,
+  direction: 'Departure' | 'Arrival' = 'Departure'
+) => request<LiveFlightRow[]>(`/live-flights${query({ airport, direction })}`);

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { DependencyList } from 'react';
 
+const resourceCache = new Map<string, unknown>();
+
 export interface AsyncResource<T> {
   data: T;
   loading: boolean;
@@ -24,7 +26,9 @@ export interface AsyncResource<T> {
 export function useApiResource<T>(
   load: () => Promise<T>,
   fallback: T,
-  deps: DependencyList
+  deps: DependencyList,
+  cacheKey?: string,
+  enabled = true
 ): AsyncResource<T> {
   const [state, setState] = useState<AsyncResource<T>>({
     data: fallback,
@@ -35,13 +39,33 @@ export function useApiResource<T>(
   useEffect(() => {
     let active = true;
 
+    if (!enabled) {
+      setState({ data: fallback, loading: false, error: null });
+      return () => {
+        active = false;
+      };
+    }
+
+    if (cacheKey && resourceCache.has(cacheKey)) {
+      setState({
+        data: resourceCache.get(cacheKey) as T,
+        loading: false,
+        error: null,
+      });
+      return () => {
+        active = false;
+      };
+    }
+
     // Keep the previous data visible while refetching, so changing a filter
     // does not blank the table it is filtering.
     setState(previous => ({ ...previous, loading: true, error: null }));
 
     load()
       .then(data => {
-        if (active) setState({ data, loading: false, error: null });
+        if (!active) return;
+        if (cacheKey) resourceCache.set(cacheKey, data);
+        setState({ data, loading: false, error: null });
       })
       .catch((cause: unknown) => {
         if (!active) return;
@@ -59,7 +83,7 @@ export function useApiResource<T>(
     // closures and literals, so including them would refetch on every render.
     // `deps` is the caller's explicit statement of what the request depends on.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
+  }, [...deps, cacheKey, enabled]);
 
   return state;
 }

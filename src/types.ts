@@ -1,204 +1,66 @@
-// FlyWise API contract.
+// The FlyWise client API contract: the exact shapes expected from the backend.
 //
-// These types describe the data exchanged between the React frontend
-// and the FastAPI backend.
+// Declared once here and imported by the client, so a field can never drift
+// between what the backend returns and what the UI renders.
 //
-// Architecture:
-//
-//   React frontend
-//        ↓
-//   Vite
-//        ↓
-//   FastAPI
-//        ↓
-//   MariaDB
-//
-// FastAPI returns JSON data directly, so the old Express ApiEnvelope
-// is no longer required.
-//
-// Rates are represented as fractions from 0-1, not percentages.
+// The client expects every endpoint to return an ApiEnvelope<T> wrapper.
+// All rates are fractions in the range 0-1, never percentages. Formatting to a
+// percentage is a presentation concern and happens only in the client.
 
+/**
+ * Uniform response envelope for every backend route. A discriminated union, so
+ * checking `success` narrows to exactly one of `data` or `error`.
+ */
+export type ApiEnvelope<T> =
+  | { success: true; data: T }
+  | { success: false; error: string };
 
-/* =========================================================
-   Dimension / Dropdown Data
-   ========================================================= */
-
-export interface Airline {
-  airline_id: number;
-  airline_code: string;
-  airline_name?: string | null;
+/** Headline figures for the dashboard cards. */
+export interface Summary {
+  totalFlights: number;
+  totalDelayed: number;
+  /** Flight-weighted, not the mean of per-route rates. */
+  avgDelayRate: number;
+  routeCount: number;
+  airportCount: number;
+  airlineCount: number;
 }
 
-export interface Airport {
-  airport_id: number;
-  airport_code: string;
-  airport_name?: string | null;
-  city_name?: string | null;
+/** One origin-destination-airline combination and its historical delay rate. */
+export interface RoutePerformanceRow {
+  airlineCode: string;
+  originCode: string;
+  originCity: string | null;
+  destCode: string;
+  flightCount: number;
+  delayedCount: number;
+  delayRate: number;
 }
 
-export interface Route {
-  origin_code: string;
-  destination_code: string;
-  origin_city?: string | null;
-  destination_city?: string | null;
+/** One airport at one scheduled departure hour. */
+export interface CongestionRow {
+  airportCode: string;
+  airportCity: string | null;
+  /** 0-23, derived from crs_dep_time (minutes since midnight) / 60. */
+  depHour: number;
+  flightCount: number;
+  delayedCount: number;
+  delayRate: number;
 }
 
-
-/* =========================================================
-   Flight Search
-   ========================================================= */
-
-export interface Flight {
-  flight_id: number;
-  flight_date?: string | null;
-  airline_code?: string | null;
-  flight_number?: string | null;
-
-  origin_code?: string | null;
-  destination_code?: string | null;
-
-  scheduled_departure_time?: string | null;
-  scheduled_arrival_time?: string | null;
-
-  actual_departure_time?: string | null;
-  actual_arrival_time?: string | null;
-
-  departure_delay?: number | null;
-  arrival_delay?: number | null;
-
-  cancelled?: boolean | null;
-  diverted?: boolean | null;
+/** A dimension-table entry, used to populate dropdowns. */
+export interface DimRow {
+  id: number;
+  code: string;
+  /** Present for airports, absent for airlines. */
+  cityName?: string | null;
 }
 
-export interface FlightDetails extends Flight {
-  origin_city?: string | null;
-  destination_city?: string | null;
-
-  airline_name?: string | null;
-
-  cancellation_reason?: string | null;
-  delay_reason?: string | null;
-}
-
-
-/* =========================================================
-   Analytics
-   ========================================================= */
-
-export interface AirlineAnalytics {
-  airline_code?: string | null;
-  airline_name?: string | null;
-
-  total_flights?: number;
-  operated_flights?: number;
-
-  cancelled_flights?: number;
-  diverted_flights?: number;
-
-  delayed_flights?: number;
-  severe_delay_flights?: number;
-
-  delay_rate?: number;
-  severe_delay_rate?: number;
-
-  average_departure_delay?: number | null;
-  average_arrival_delay?: number | null;
-  max_arrival_delay?: number | null;
-}
-
-export interface RouteAnalytics {
-  origin_code?: string | null;
-  destination_code?: string | null;
-
-  total_flights?: number;
-  operated_flights?: number;
-
-  cancelled_flights?: number;
-  diverted_flights?: number;
-
-  delayed_flights?: number;
-  severe_delay_flights?: number;
-
-  delay_rate?: number;
-  severe_delay_rate?: number;
-
-  average_departure_delay?: number | null;
-  average_arrival_delay?: number | null;
-  max_arrival_delay?: number | null;
-}
-
-export interface AirportAnalytics {
-  airport_code?: string | null;
-  airport_name?: string | null;
-
-  total_flights?: number;
-  operated_flights?: number;
-
-  cancelled_flights?: number;
-  diverted_flights?: number;
-
-  delayed_flights?: number;
-
-  delay_rate?: number;
-
-  average_departure_delay?: number | null;
-  average_arrival_delay?: number | null;
-}
-
-export interface MonthlyDelayTrend {
-  month?: string | null;
-  total_flights?: number;
-  delayed_flights?: number;
-  delay_rate?: number;
-}
-
-export interface HourlyDelayTrend {
-  dep_hour?: number;
-  total_flights?: number;
-  delayed_flights?: number;
-  delay_rate?: number;
-}
-
-export interface DelayCause {
-  rank: number;
-  delay_cause?: string | null;
-  total_delays?: number;
-  percentage?: number;
-}
-
-
-/* =========================================================
-   Airline + Route Analytics
-   ========================================================= */
-
-export interface AirlineRouteAnalytics {
-  airline_code?: string | null;
-
-  origin_code?: string | null;
-  destination_code?: string | null;
-
-  total_flights?: number;
-  operated_flights?: number;
-
-  cancelled_flights?: number;
-  diverted_flights?: number;
-
-  delayed_flights?: number;
-  severe_delay_flights?: number;
-
-  delay_rate?: number;
-  severe_delay_rate?: number;
-
-  average_departure_delay?: number | null;
-  average_arrival_delay?: number | null;
-  max_arrival_delay?: number | null;
-}
-
-
-/* =========================================================
-   Prediction
-   ========================================================= */
-
+/**
+ * Historical rates backing a prediction. `null` means "no history for this
+ * route or hour" and is deliberately not collapsed to 0, so the caller chooses
+ * the fallback instead of silently treating unknown as never-delayed.
+ */
 export interface HistoricalRates {
   routeDelayRate: number | null;
   hourlyDelayRate: number | null;
@@ -206,68 +68,77 @@ export interface HistoricalRates {
 
 export type DelayLabel = 'DELAYED' | 'ON_TIME';
 
-export interface PredictionFeatures {
-  originAirportId: number;
-  destAirportId: number;
-  airlineId: number;
-
-  depHour: number;
-
-  routeDelayRate: number | null;
-  hourlyDelayRate: number | null;
-
-  dayOfWeek: number;
-}
-
+/** What the model returns. */
 export interface Prediction {
+  /** Confidence in `label`, 0-1. */
   score: number;
   label: DelayLabel;
   modelVersion: string;
 }
 
+/** What POST /predict returns: the prediction plus the evidence behind it. */
 export interface PredictionResult extends Prediction {
   historical: HistoricalRates;
 }
 
+/** Request body for POST /api/predict. */
 export interface PredictionRequest {
   originAirportId: number;
   destAirportId: number;
   airlineId: number;
-
+  /** HHMM, e.g. "0800". */
   scheduledDepartureTime: string;
+  /** YYYY-MM-DD. */
   flightDate: string;
 }
 
-
-/* =========================================================
-   API Query Parameters
-   ========================================================= */
-
-export interface RouteQuery {
-  origin: string;
-}
-
-export interface FlightQuery {
+export interface FlightSearchRow {
   flight_date: string;
+  airline_code: string;
+  flight_number: number | null;
   origin: string;
   destination: string;
+  scheduled_departure: string | null;
+  scheduled_arrival: string | null;
+  departure_delay: number | null;
+  arrival_delay: number | null;
+  cancelled: number | boolean;
+  diverted: number | boolean;
 }
 
-export interface AirlineAnalyticsQuery {
-  airline: string;
+export interface MonthlyTrendRow {
+  month: string;
+  total_flights: number;
+  delay_rate: number;
+  avg_delay: number | null;
 }
 
-export interface RouteAnalyticsQuery {
-  origin: string;
-  destination: string;
+export interface HourlyTrendRow {
+  departure_hour: string;
+  total_flights: number;
+  delay_rate: number;
+  avg_delay: number | null;
 }
 
-export interface AirportAnalyticsQuery {
-  airport: string;
+export interface DelayCauseRow {
+  rank: number;
+  delay_cause: string;
+  delay_hours: number;
+  delay_percentage: number;
 }
 
-export interface AirlineRouteAnalyticsQuery {
-  airline: string;
-  origin: string;
-  destination: string;
+export interface LiveFlightRow {
+  number: string | null;
+  airline: string | null;
+  airlineCode: string | null;
+  status: string | null;
+  airport: string | null;
+  scheduledTime: string | null;
+  revisedTime: string | null;
+  terminal: string | null;
+  gate: string | null;
+  aircraft: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  lastUpdatedUtc: string | null;
 }
