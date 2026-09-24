@@ -37,58 +37,60 @@ export default function DataTable<T>({
   const headingId = useId();
 
   return (
-    <section className={PANEL} aria-labelledby={headingId}>
-      <div className="px-6 py-4 border-b border-line">
+    <section className={`${PANEL} flex flex-col h-full`} aria-labelledby={headingId}>
+      <div className="px-6 py-4 border-b border-line flex-shrink-0">
         <h3 id={headingId} className={SECTION_HEADING}>
           {title}
         </h3>
       </div>
 
-      <div className="overflow-x-auto">
-        <table className="min-w-full divide-y divide-line">
-          <thead className="bg-surface-raised">
-            <tr>
-              {columns.map(column => (
-                <th
-                  key={column.label}
-                  scope="col"
-                  className={`px-6 py-3 text-xs font-semibold text-ink-dim uppercase tracking-wider ${
-                    column.numeric ? 'text-right' : 'text-left'
-                  }`}
-                >
-                  {column.label}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="bg-surface divide-y divide-line">
-            {rows.length === 0 ? (
+      <div className="flex-grow overflow-hidden flex flex-col">
+        <div className="overflow-x-auto overflow-y-auto flex-grow">
+          <table className="min-w-full divide-y divide-line">
+            <thead className="bg-surface-raised sticky top-0">
               <tr>
-                <td colSpan={columns.length} className="px-6 py-10 text-center text-ink-dim">
-                  {emptyMessage}
-                </td>
+                {columns.map(column => (
+                  <th
+                    key={column.label}
+                    scope="col"
+                    className={`px-6 py-3 text-xs font-semibold text-ink-dim uppercase tracking-wider ${
+                      column.numeric ? 'text-right' : 'text-left'
+                    }`}
+                  >
+                    {column.label}
+                  </th>
+                ))}
               </tr>
-            ) : (
-              rows.map((row, index) => (
-                <tr
-                  key={rowKey(row)}
-                  className={`transition-colors hover:bg-amber/10 ${index % 2 === 1 ? 'bg-surface-raised/40' : ''}`}
-                >
-                  {columns.map(column => (
-                    <td
-                      key={column.label}
-                      className={`px-6 py-4 whitespace-nowrap text-sm text-ink-dim ${
-                        column.numeric ? 'text-right tabular-nums font-mono font-medium text-ink' : 'text-left'
-                      }`}
-                    >
-                      {column.render(row)}
-                    </td>
-                  ))}
+            </thead>
+            <tbody className="bg-surface divide-y divide-line">
+              {rows.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.length} className="px-6 py-10 text-center text-ink-dim">
+                    {emptyMessage}
+                  </td>
                 </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+              ) : (
+                rows.map((row, index) => (
+                  <tr
+                    key={rowKey(row)}
+                    className={`transition-colors hover:bg-amber/10 ${index % 2 === 1 ? 'bg-surface-raised/40' : ''}`}
+                  >
+                    {columns.map(column => (
+                      <td
+                        key={column.label}
+                        className={`px-6 py-4 whitespace-nowrap text-sm text-ink-dim ${
+                          column.numeric ? 'text-right tabular-nums font-mono font-medium text-ink' : 'text-left'
+                        }`}
+                      >
+                        {column.render(row)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
       </div>
     </section>
   );

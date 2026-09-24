@@ -160,20 +160,24 @@ export default function App() {
         />
 
         <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <DataTable
-            title="Busiest routes"
-            columns={routeColumns}
-            rows={routes.data}
-            rowKey={row => `${row.airlineCode}-${row.originCode}-${row.destCode}`}
-            emptyMessage={routes.loading ? 'Loading…' : 'No routes match these filters'}
-          />
-          <DataTable
-            title="Airport congestion by hour"
-            columns={congestionColumns}
-            rows={congestion.data}
-            rowKey={row => `${row.airportCode}-${row.depHour}`}
-            emptyMessage={congestion.loading ? 'Loading…' : 'No congestion data for this airport'}
-          />
+          <div className="flex flex-col h-[550px]">
+            <DataTable
+              title="Busiest routes"
+              columns={routeColumns}
+              rows={routes.data}
+              rowKey={row => `${row.airlineCode}-${row.originCode}-${row.destCode}`}
+              emptyMessage={routes.loading ? 'Loading…' : 'No routes match these filters'}
+            />
+          </div>
+          <div className="flex flex-col h-[550px]">
+            <DataTable
+              title="Airport congestion by hour"
+              columns={congestionColumns}
+              rows={congestion.data}
+              rowKey={row => `${row.airportCode}-${row.depHour}`}
+              emptyMessage={congestion.loading ? 'Loading…' : 'No congestion data for this airport'}
+            />
+          </div>
         </div>
 
         <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
