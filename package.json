@@ -5,8 +5,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "npm-run-all --parallel dev:server dev:client",
-    "dev:server": "nodemon --watch src --ext ts,json --ignore src/client --exec \"tsx src/server.ts\"",
+    "dev": "vite",
     "dev:client": "vite",
     "build": "cross-env NODE_ENV=production vite build",
     "start": "tsx src/server.ts",
@@ -47,7 +46,7 @@
     "@types/react-dom": "^18.2.24",
     "@typescript-eslint/eslint-plugin": "^7.5.0",
     "@typescript-eslint/parser": "^7.5.0",
-    "@vitejs/plugin-react-swc": "^3.6.0",
+    "@vitejs/plugin-react-swc": "^3.11.0",
     "autoprefixer": "^10.4.19",
     "cross-env": "7.0.3",
     "eslint": "^8.57.0",
