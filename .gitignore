@@ -12,7 +12,7 @@ coverage/
 *.lcov
 .nyc_output
 
-# Environment variables (.env.example IS tracked, as the template)
+# Environment variables
 .env
 .env.local
 .env.*.local
@@ -37,9 +37,6 @@ flight_project_cleaned.csv
 ._*
 Thumbs.db
 ehthumbs.db
-
-# Docker local overrides
-docker-compose.override.yml
 
 # Database dumps
 *.sql.gz

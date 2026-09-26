@@ -1,6 +1,6 @@
 # FlyWise
 
-Flight Delay Prediction & Analytics Cloud-Based Web Application
+Flight delay analytics and prediction platform for INF2006 Group 12.
 
 ## Architecture
 
@@ -14,7 +14,7 @@ FastAPI backend (:8000) ---- Aviationstack (live flights only)
 MySQL/MariaDB Workbench (historical data and analytics)
 ```
 
-Historical searches, analytics, and predictions use the database. Aviationstack API is
+Historical searches, analytics, and predictions use the database. Aviationstack is
 called only by `GET /live-flights` when a user manually loads the Live Flights page.
 
 ## Prerequisites
@@ -22,10 +22,11 @@ called only by `GET /live-flights` when a user manually loads the Live Flights p
 - Python 3.13 or compatible Python version
 - Node.js and npm
 - MySQL/MariaDB and MySQL Workbench
-- A flight database named `group_project` containing `airlines`, `airports`, `routes`, and `flights`
-- Additional derived table `route_statistics`
+- A database named `group_project` containing `airlines`, `airports`, `routes`, and `flights`
+- An Aviationstack API key for local live-flight testing
 
-The database is not stored in Git.
+The database is not stored in Git. Share a sanitized schema/data setup script separately;
+never commit database passwords or API keys.
 
 ## Run Locally
 

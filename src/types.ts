@@ -1,22 +1,14 @@
-// The FlyWise API contract: the exact shapes that cross the HTTP boundary.
+// The FlyWise client API contract: the exact shapes expected from the backend.
 //
-// Declared once here and imported by every side, so a field can never drift
-// between what SQL returns, what the model consumes, and what the UI renders:
+// Declared once here and imported by the client, so a field can never drift
+// between what the backend returns and what the UI renders.
 //
-//   src/db/queries.ts          produces the row types
-//   src/ml/model.ts            consumes PredictionFeatures, produces Prediction
-//   src/api/routes/*.ts        wraps them in ApiEnvelope
-//   src/client/services/api.ts unwraps ApiEnvelope back into these same types
-//
-// Import style differs by side, deliberately: server modules run through tsx as
-// Node ESM and need the explicit '.js' specifier, the client is bundled by Vite
-// and uses extensionless imports. Both resolve to this file.
-//
+// The client expects every endpoint to return an ApiEnvelope<T> wrapper.
 // All rates are fractions in the range 0-1, never percentages. Formatting to a
 // percentage is a presentation concern and happens only in the client.
 
 /**
- * Uniform response envelope for every /api route. A discriminated union, so
+ * Uniform response envelope for every backend route. A discriminated union, so
  * checking `success` narrows to exactly one of `data` or `error`.
  */
 export type ApiEnvelope<T> =
@@ -76,18 +68,6 @@ export interface HistoricalRates {
 
 export type DelayLabel = 'DELAYED' | 'ON_TIME';
 
-/** Everything the model is allowed to see. Contains no post-departure fields. */
-export interface PredictionFeatures {
-  originAirportId: number;
-  destAirportId: number;
-  airlineId: number;
-  depHour: number;
-  routeDelayRate: number | null;
-  hourlyDelayRate: number | null;
-  /** Day of week, 0 (Sunday) - 6, derived from the requested flight date. */
-  dayOfWeek: number;
-}
-
 /** What the model returns. */
 export interface Prediction {
   /** Confidence in `label`, 0-1. */
@@ -96,7 +76,7 @@ export interface Prediction {
   modelVersion: string;
 }
 
-/** What POST /api/predict returns: the prediction plus the evidence behind it. */
+/** What POST /predict returns: the prediction plus the evidence behind it. */
 export interface PredictionResult extends Prediction {
   historical: HistoricalRates;
 }
@@ -112,15 +92,53 @@ export interface PredictionRequest {
   flightDate: string;
 }
 
-/** Filters for GET /api/airlines. Values arrive as untrusted query strings. */
-export interface RouteQuery {
-  airlineId?: unknown;
-  originId?: unknown;
-  limit?: unknown;
+export interface FlightSearchRow {
+  flight_date: string;
+  airline_code: string;
+  flight_number: number | null;
+  origin: string;
+  destination: string;
+  scheduled_departure: string | null;
+  scheduled_arrival: string | null;
+  departure_delay: number | null;
+  arrival_delay: number | null;
+  cancelled: number | boolean;
+  diverted: number | boolean;
 }
 
-/** Filters for GET /api/airports/congestion. */
-export interface CongestionQuery {
-  airportId?: unknown;
-  limit?: unknown;
+export interface MonthlyTrendRow {
+  month: string;
+  total_flights: number;
+  delay_rate: number;
+  avg_delay: number | null;
+}
+
+export interface HourlyTrendRow {
+  departure_hour: string;
+  total_flights: number;
+  delay_rate: number;
+  avg_delay: number | null;
+}
+
+export interface DelayCauseRow {
+  rank: number;
+  delay_cause: string;
+  delay_hours: number;
+  delay_percentage: number;
+}
+
+export interface LiveFlightRow {
+  number: string | null;
+  airline: string | null;
+  airlineCode: string | null;
+  status: string | null;
+  airport: string | null;
+  scheduledTime: string | null;
+  revisedTime: string | null;
+  terminal: string | null;
+  gate: string | null;
+  aircraft: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  lastUpdatedUtc: string | null;
 }
