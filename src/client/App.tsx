@@ -139,74 +139,88 @@ export default function App() {
       ) : activeView === 'analytics' ? (
         <AnalyticsPage />
       ) : (
-      <main className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8">
+      <main id="main-content" className="mx-auto max-w-7xl px-4 py-8 sm:px-6 lg:px-8 animate-fade-in">
         <ErrorBanner
           errors={[summary.error, airports.error, airlines.error, routes.error, congestion.error]}
         />
 
-        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+        {/* Enhanced dashboard cards with skeleton loading */}
+        <div className="mb-8 grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4 animate-slide-in-left">
           <DashboardCard
             title="Flights analysed"
             value={summary.data ? count(summary.data.totalFlights) : PENDING}
             description="Within the training window"
             color="blue"
+            isLoading={summary.loading}
+            loadingWidth={70}
           />
           <DashboardCard
             title="Average delay rate"
             value={avgDelayRate === undefined ? PENDING : percent(avgDelayRate)}
             description="Weighted by flight volume"
             color={avgDelayRate !== undefined && avgDelayRate > ELEVATED_DELAY_RATE ? 'red' : 'green'}
+            isLoading={summary.loading}
+            loadingWidth={60}
           />
           <DashboardCard
             title="Routes tracked"
             value={summary.data ? count(summary.data.routeCount) : PENDING}
             description="Route and airline combinations"
             color="purple"
+            isLoading={summary.loading}
+            loadingWidth={65}
           />
           <DashboardCard
             title="Airports"
             value={summary.data ? count(summary.data.airportCount) : PENDING}
             description={summary.data ? `${count(summary.data.airlineCount)} airlines` : undefined}
             color="yellow"
+            isLoading={summary.loading}
+            loadingWidth={55}
           />
         </div>
 
+        {/* Enhanced filter panel with loading states */}
         <FilterPanel
           airports={airports.data}
           airlines={airlines.data}
           filters={filters}
           onChange={setFilters}
           disabled={dimensionsLoading}
+          isLoading={dimensionsLoading}
         />
 
-        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
-          <div className="flex flex-col h-[550px]">
-            <DataTable
-              title="Busiest routes"
-              columns={routeColumns}
-              rows={routes.data}
-              rowKey={row => `${row.airlineCode}-${row.originCode}-${row.destCode}`}
-              emptyMessage={routes.loading ? 'Loading…' : 'No routes match these filters'}
-            />
-          </div>
-          <div className="flex flex-col h-[550px]">
-            <DataTable
-              title="Airport congestion by hour"
-              columns={congestionColumns}
-              rows={congestion.data}
-              rowKey={row => `${row.airportCode}-${row.depHour}`}
-              emptyMessage={congestion.loading ? 'Loading…' : 'No congestion data for this airport'}
-            />
-          </div>
+        {/* Enhanced data tables section */}
+        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2 animate-slide-in-right">
+          <DataTable
+            title="Busiest routes"
+            columns={routeColumns}
+            rows={routes.data}
+            rowKey={row => `${row.airlineCode}-${row.originCode}-${row.destCode}`}
+            emptyMessage={routes.loading ? 'Loading…' : 'No routes match these filters'}
+            isLoading={routes.loading}
+            loadingRows={5}
+          />
+          <DataTable
+            title="Airport congestion by hour"
+            columns={congestionColumns}
+            rows={congestion.data}
+            rowKey={row => `${row.airportCode}-${row.depHour}`}
+            emptyMessage={congestion.loading ? 'Loading…' : 'No congestion data for this airport'}
+            isLoading={congestion.loading}
+            loadingRows={5}
+          />
         </div>
 
-        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2">
+        {/* Enhanced prediction section */}
+        <div className="mb-8 grid grid-cols-1 gap-8 lg:grid-cols-2 animate-fade-in">
           <PredictionForm
             airports={airports.data}
             airlines={airlines.data}
             onSubmit={handlePredict}
-            isLoading={isPredicting}
+            isLoading={dimensionsLoading}
             disabled={dimensionsLoading}
+            predictionInProgress={isPredicting}
           />
           <PredictionPanel
             result={prediction}
