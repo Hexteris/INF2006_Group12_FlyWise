@@ -89,7 +89,7 @@ function DataTable<T>({
           <table className="min-w-full divide-y divide-line" aria-busy={isLoading}>
             <thead className="bg-surface-raised sticky top-0 z-10 shadow-sm">
               <tr>
-                {visibleColumns.map((column, index) => (
+                {visibleColumns.map((column) => (
                   <th
                     key={column.label}
                     scope="col"

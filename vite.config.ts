@@ -27,6 +27,7 @@ export default defineConfig({
       '/flights': 'http://localhost:8000',
       '/analytics': 'http://localhost:8000',
       '/prediction-data': 'http://localhost:8000',
+      '/auth': 'http://localhost:8000',
     },
   },
 

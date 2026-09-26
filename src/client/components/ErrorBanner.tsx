@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NOTIFICATION_ERROR, FOCUS_VISIBLE } from '../styles';
+import { FOCUS_VISIBLE } from '../styles';
 
 interface ErrorBannerProps {
   /** Messages to show. Falsy entries are ignored so callers can pass error slots directly. */

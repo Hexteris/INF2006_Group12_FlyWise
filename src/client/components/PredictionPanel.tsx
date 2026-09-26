@@ -7,12 +7,9 @@ import {
   PANEL_PADDING, 
   SECTION_HEADING, 
   NOTIFICATION_ERROR, 
-  NOTIFICATION_SUCCESS, 
   NOTIFICATION_INFO, 
   LOADING_SPINNER,
-  SKELETON_CLASSES,
   FOCUS_VISIBLE,
-  TEXT_LG,
   TEXT_MD 
 } from '../styles';
 
@@ -304,9 +301,8 @@ function PredictionPanel({ result, error, isLoading }: PredictionPanelProps) {
             </div>
 
             {/* Model info */}
-            <div className="mt-4 text-xs text-ink-dim/70 font-mono flex items-center justify-between">
+            <div className="mt-4 text-xs text-ink-dim/70 font-mono">
               <span>Model version: {result.modelVersion}</span>
-              <span className="text-ink-dim/50">ID: {result.predictionId}</span>
             </div>
           </div>
 
@@ -355,7 +351,7 @@ function PredictionPanel({ result, error, isLoading }: PredictionPanelProps) {
                 <ul className="space-y-2 text-sm text-ink">
                   <li className="flex items-start gap-2">
                     <span className="text-ink-dim mt-0.5">•</span>
-                    <span>Based on {result.historical.sampleSize || 'extensive'} historical data points</span>
+                    <span>Based on historical flight data analysis</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <span className="text-ink-dim mt-0.5">•</span>

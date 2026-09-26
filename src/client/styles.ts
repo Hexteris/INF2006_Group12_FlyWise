@@ -83,6 +83,15 @@ export const BUTTON_SECONDARY =
   'disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:translate-y-0 ' +
   'min-h-[44px] min-w-[44px] flex items-center justify-center';
 
+/** Danger button variant for destructive actions */
+export const BUTTON_DANGER =
+  'rounded-lg bg-bad px-5 py-3.5 font-semibold text-bg shadow-md border border-bad/30 transition-all duration-250 ' +
+  'hover:bg-bad/90 hover:shadow-lg hover:-translate-y-0.5 ' +
+  'active:scale-[0.98] active:shadow-sm ' +
+  'focus:outline-none focus:ring-3 focus:ring-bad/40 focus:ring-offset-2 focus:ring-offset-surface ' +
+  'disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:translate-y-0 disabled:hover:shadow-md ' +
+  'min-h-[44px] min-w-[44px] flex items-center justify-center gap-2';
+
 /** Loading spinner animation for async operations */
 export const LOADING_SPINNER = 'animate-spin h-5 w-5 border-2 border-amber/30 border-t-amber rounded-full';
 
@@ -90,6 +99,7 @@ export const LOADING_SPINNER = 'animate-spin h-5 w-5 border-2 border-amber/30 bo
 export const NOTIFICATION_SUCCESS = 'rounded-lg border border-good/30 bg-good/10 px-4 py-3 text-sm text-good';
 export const NOTIFICATION_ERROR = 'rounded-lg border border-bad/30 bg-bad/10 px-4 py-3 text-sm text-bad';
 export const NOTIFICATION_INFO = 'rounded-lg border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-ink';
+export const NOTIFICATION_WARNING = 'rounded-lg border border-amber/30 bg-amber/10 px-4 py-3 text-sm text-ink';
 
 /** Focus management styles for keyboard navigation */
 export const FOCUS_VISIBLE = 'focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-amber/40 focus-visible:ring-offset-2 focus-visible:ring-offset-surface';

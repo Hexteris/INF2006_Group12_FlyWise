@@ -20,6 +20,11 @@ import type {
   HourlyTrendRow,
   DelayCauseRow,
   LiveFlightRow,
+  User,
+  AuthResponse,
+  LoginRequest,
+  SignupRequest,
+  UpdateProfileRequest,
 } from '../../types';
 
 const BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
@@ -146,3 +151,34 @@ export const fetchLiveFlights = (
   airport: string,
   direction: 'Departure' | 'Arrival' = 'Departure'
 ) => request<LiveFlightRow[]>(`/live-flights${query({ airport, direction })}`);
+
+// Auth API functions
+export const authLogin = (credentials: LoginRequest) =>
+  request<AuthResponse>('/auth/login', {
+    method: 'POST',
+    body: JSON.stringify(credentials),
+  });
+
+export const authSignup = (userData: SignupRequest) =>
+  request<AuthResponse>('/auth/signup', {
+    method: 'POST',
+    body: JSON.stringify(userData),
+  });
+
+export const authMe = (token: string) =>
+  request<User>('/auth/me', {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+export const authUpdateProfile = (token: string, updates: UpdateProfileRequest) =>
+  request<User>('/auth/me', {
+    method: 'PATCH',
+    headers: { Authorization: `Bearer ${token}` },
+    body: JSON.stringify(updates),
+  });
+
+export const authDeleteAccount = (token: string) =>
+  request<{ success: true }>('/auth/me', {
+    method: 'DELETE',
+    headers: { Authorization: `Bearer ${token}` },
+  });

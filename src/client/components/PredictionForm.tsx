@@ -1,6 +1,7 @@
 import { useId, useState, useCallback, memo, useEffect } from 'react';
 import type { DimRow, PredictionRequest } from '../../types';
 import DimSelect from './DimSelect';
+import { useAuth } from '../context/AuthContext';
 import { 
   ACCENT_BORDER, 
   BUTTON_PRIMARY, 
@@ -11,6 +12,7 @@ import {
   SECTION_HEADING, 
   NOTIFICATION_ERROR, 
   NOTIFICATION_INFO, 
+  NOTIFICATION_WARNING,
   LOADING_SPINNER, 
   GRID_FORM, 
   FOCUS_VISIBLE 
@@ -50,6 +52,7 @@ function PredictionForm({
   const [flightDate, setFlightDate] = useState(today);
   const [formErrors, setFormErrors] = useState<string[]>([]);
   const [isSubmitted, setIsSubmitted] = useState(false);
+  const { isAuthenticated, openAuthModal } = useAuth();
 
   const timeId = useId();
   const dateId = useId();
@@ -69,6 +72,18 @@ function PredictionForm({
   const handleSubmit = useCallback((event: React.FormEvent) => {
     event.preventDefault();
     setIsSubmitted(true);
+
+    // Check authentication before form validation
+    if (!isAuthenticated) {
+      openAuthModal('login');
+      
+      // Show auth required notification
+      const authErrorElement = document.querySelector('.auth-required-notification');
+      authErrorElement?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      setFormErrors(['Please sign in to use prediction features']);
+      return;
+    }
 
     const errors: string[] = [];
 
@@ -93,7 +108,7 @@ function PredictionForm({
       scheduledDepartureTime: departureTime.replace(':', ''),
       flightDate,
     });
-  }, [originAirportId, destAirportId, airlineId, sameAirport, departureTime, flightDate, onSubmit]);
+  }, [originAirportId, destAirportId, airlineId, sameAirport, departureTime, flightDate, onSubmit, isAuthenticated, openAuthModal]);
 
   const handleClearForm = useCallback(() => {
     setOriginAirportId(undefined);
@@ -289,6 +304,39 @@ function PredictionForm({
 
         {/* Form status and errors */}
         <div className="space-y-4">
+          {/* Authentication required notification */}
+          {!isAuthenticated && (
+            <div role="alert" className={`${NOTIFICATION_WARNING} auth-required-notification`}>
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                  </svg>
+                  <span className="font-medium">Sign in required for prediction</span>
+                </div>
+                <div className="text-sm">
+                  <p className="mb-2">To use the flight delay prediction feature, please sign in or create an account.</p>
+                  <div className="flex gap-3">
+                    <button
+                      type="button"
+                      onClick={() => openAuthModal('login')}
+                      className="px-4 py-2 text-sm font-medium bg-amber text-bg rounded-lg hover:bg-amber/90 transition-colors"
+                    >
+                      Sign in
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => openAuthModal('signup')}
+                      className="px-4 py-2 text-sm font-medium border border-line/50 rounded-lg hover:bg-surface-raised transition-colors"
+                    >
+                      Create account
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Same airport error */}
           {sameAirport && (
             <div role="alert" className={NOTIFICATION_ERROR}>
@@ -302,7 +350,7 @@ function PredictionForm({
           )}
 
           {/* Form validation errors */}
-          {formErrors.length > 0 && (
+          {formErrors.length > 0 && formErrors[0] !== 'Please sign in to use prediction features' && (
             <div role="alert" className={NOTIFICATION_ERROR}>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -321,7 +369,7 @@ function PredictionForm({
           )}
 
           {/* Form validation success */}
-          {isFormValid && !isSubmitting && (
+          {isFormValid && !isSubmitting && isAuthenticated && (
             <div className={NOTIFICATION_INFO}>
               <div className="flex items-center gap-2">
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -336,9 +384,10 @@ function PredictionForm({
         {/* Submit button with enhanced loading state */}
         <button
           type="submit"
-          disabled={!isFormValid || isSubmitting || disabled}
-          className={`${BUTTON_PRIMARY} relative overflow-hidden group ${FOCUS_VISIBLE}`}
-          aria-label={isSubmitting ? "Predicting flight delay..." : "Get delay prediction"}
+          disabled={(!isFormValid && isAuthenticated) || isSubmitting || disabled}
+          className={`${BUTTON_PRIMARY} relative overflow-hidden group ${FOCUS_VISIBLE} ${!isAuthenticated ? 'opacity-80 cursor-not-allowed' : ''}`}
+          aria-label={isSubmitting ? "Predicting flight delay..." : !isAuthenticated ? "Sign in to get delay prediction" : "Get delay prediction"}
+          title={!isAuthenticated ? "Sign in to use prediction features" : undefined}
         >
           {/* Animated background effect */}
           <span className="absolute inset-0 bg-gradient-to-r from-amber/20 to-good/20 transform -translate-x-full group-hover:translate-x-full transition-transform duration-700" />
@@ -349,6 +398,24 @@ function PredictionForm({
               <>
                 <div className={LOADING_SPINNER} aria-hidden="true" />
                 <span className="animate-pulse">Predicting flight delay...</span>
+              </>
+            ) : !isAuthenticated ? (
+              <>
+                <svg
+                  className="w-5 h-5"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                  aria-hidden="true"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
+                  />
+                </svg>
+                <span>Sign in to predict</span>
               </>
             ) : (
               <>
@@ -372,7 +439,7 @@ function PredictionForm({
           </span>
 
           {/* Disabled state indicator */}
-          {!isFormValid && !isSubmitting && (
+          {(!isFormValid && isAuthenticated) && !isSubmitting && (
             <span className="absolute -top-2 -right-2 w-4 h-4 bg-ink-dim rounded-full flex items-center justify-center">
               <span className="text-xs text-bg">!</span>
             </span>

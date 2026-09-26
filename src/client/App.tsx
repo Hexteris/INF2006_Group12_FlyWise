@@ -8,6 +8,7 @@
 //
 // Changing what a table displays means editing one `columns` array below.
 import { useState } from 'react';
+import { AuthProvider, useAuth } from './context/AuthContext';
 import type {
   CongestionRow,
   DimRow,
@@ -27,6 +28,8 @@ import FlightSearchPage from './components/FlightSearchPage';
 import LiveFlightsPage from './components/LiveFlightsPage';
 import PredictionForm from './components/PredictionForm';
 import PredictionPanel from './components/PredictionPanel';
+import AuthModal from './components/AuthModal';
+import AccountSettingsModal from './components/AccountSettingsModal';
 import { useApiResource } from './hooks/useApiResource';
 import { PENDING, count, hourLabel, percent } from './format';
 import {
@@ -72,12 +75,19 @@ const congestionColumns: Column<CongestionRow>[] = [
   { label: 'Delay rate', render: row => percent(row.delayRate), numeric: true },
 ];
 
-export default function App() {
+function AppContent() {
   const [activeView, setActiveView] = useState<AppView>('overview');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const [prediction, setPrediction] = useState<PredictionResult | null>(null);
   const [predictionError, setPredictionError] = useState<string | null>(null);
   const [isPredicting, setIsPredicting] = useState(false);
+
+  // Auth context for modals
+  const {
+    isAuthModalOpen,
+    isSettingsModalOpen,
+    closeSettingsModal,
+  } = useAuth();
 
   // Loaded once: headline figures and the dropdown sources.
   const overviewEnabled = activeView === 'overview';
@@ -233,6 +243,13 @@ export default function App() {
       </main>
       )}
 
+      {/* Auth Modals */}
+      {isAuthModalOpen && <AuthModal />}
+      <AccountSettingsModal
+        isOpen={isSettingsModalOpen}
+        onClose={closeSettingsModal}
+      />
+
       <footer className="mt-8 border-t border-line bg-surface py-6">
         <div className="mx-auto max-w-7xl px-4 text-center text-sm text-ink-dim sm:px-6 lg:px-8">
           <p>FlyWise Flight Delay Intelligence Platform — INF2006 Group 12</p>
@@ -245,5 +262,13 @@ export default function App() {
         </div>
       </footer>
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
