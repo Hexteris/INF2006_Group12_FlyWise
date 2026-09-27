@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
-from dotenv import load_dotenv
 from pydantic import BaseModel
 from pathlib import Path
 from datetime import timedelta
@@ -11,7 +10,6 @@ import os
 import re
 import time
 
-load_dotenv() #Read environment variables from .env file
 
 # =========================================================
 # FastAPI Application
