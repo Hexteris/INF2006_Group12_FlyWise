@@ -1,193 +1,124 @@
 # FlyWise Data Dictionary
 
-Tracks every table, its origin migration, and column meaning. Updated in the
-same commit as any migration that changes the schema.
+This document describes the real MySQL/MariaDB schema used by `FastAPI.py`.
+The database is maintained in MySQL Workbench and is not created by the React
+frontend or by the application container.
 
-## Source data
+## Database
 
-`flight_project_cleaned.csv` — BTS 2025 on-time performance, one row per
-flight. Loaded by the Task 4 streaming ETL.
+```text
+Database: group_project
+Source: US flight-delay data loaded into MySQL/MariaDB Workbench
+Backend connection: FastAPI.py -> MariaDB Connector/Python
+```
 
-Quirks the loader must handle:
-- City names are quoted and contain commas: `"New York, NY"`
-- `CRSDepTime` / `CRSArrTime` are HHMM integers: `659` means 06:59
-- Times and delays are float-formatted: `656.0`, `-3.0`
-- `CancellationCode` holds free text (`Not Cancelled`), not a single code letter
+The application currently reports 14 airlines, 352 airports, 6,938 routes, and
+7,001,619 flights for the connected dataset. Counts depend on the data loaded in
+the Workbench database.
 
-## Leakage rule
+## Tables
 
-Target: `DepDel15`. The following source columns are **outcomes** and must
-never be used as model features (Task 7): `DepTime`, `DepDelay`, `ArrTime`,
-`ArrDelay`, `ArrDel15`, `ActualElapsedTime`, `AirTime`, `CarrierDelay`,
-`WeatherDelay`, `NASDelay`, `SecurityDelay`, `LateAircraftDelay`, `Cancelled`,
-`CancellationCode`. They are stored in `fact_flight` (for labels and
-historical-rate aggregates) but excluded from the feature vector.
+### `airlines`
 
-## Migration 001 — `001_core_schema.sql`
+One row per reporting airline.
 
-### `dim_airline`
-
-| Column | Type | Notes |
+| Column | Type | Description |
 |---|---|---|
-| id | INT PK AUTO_INCREMENT | |
-| code | VARCHAR(8) UNIQUE | `Reporting_Airline`, e.g. `AA` |
-| created_at | TIMESTAMP | |
+| `airline_id` | `INT`, auto-increment, primary key | Internal airline identifier |
+| `airline_code` | `VARCHAR(5)`, unique, not null | Airline code, for example `AA` |
 
-### `dim_airport`
+### `airports`
 
-| Column | Type | Notes |
+One row per airport appearing as an origin or destination.
+
+| Column | Type | Description |
 |---|---|---|
-| id | INT PK AUTO_INCREMENT | |
-| code | VARCHAR(8) UNIQUE | IATA code, e.g. `JFK` |
-| city_name | VARCHAR(128) NULL | e.g. `New York, NY` (comma preserved, quoting stripped by loader) |
-| created_at | TIMESTAMP | |
+| `airport_id` | `INT`, auto-increment, primary key | Internal airport identifier |
+| `airport_code` | `VARCHAR(5)`, unique, not null | IATA airport code, for example `JFK` |
+| `city_name` | `VARCHAR(100)` | City name |
+| `state` | `VARCHAR(50)` | State or region |
 
-### `fact_flight`
+### `routes`
 
-One row per flight. Split into pre-pushback fields (safe as model features)
-and post-flight outcome fields (label + historical aggregates only, never
-features — see leakage rule above).
+One row per unique origin-destination pair.
 
-| Column | Type | Category | Notes |
-|---|---|---|---|
-| id | BIGINT PK AUTO_INCREMENT | | |
-| flight_date | DATE | pre-pushback | |
-| airline_id | INT FK → dim_airline | pre-pushback | |
-| flight_number | VARCHAR(16) | pre-pushback | |
-| origin_airport_id | INT FK → dim_airport | pre-pushback | |
-| dest_airport_id | INT FK → dim_airport | pre-pushback | |
-| crs_dep_time | SMALLINT | pre-pushback | scheduled dep, minutes since midnight (0-1439), parsed from HHMM |
-| crs_arr_time | SMALLINT | pre-pushback | scheduled arr, minutes since midnight |
-| crs_elapsed_time | SMALLINT NULL | pre-pushback | scheduled elapsed minutes |
-| distance | SMALLINT NULL | pre-pushback | miles |
-| dep_time | SMALLINT NULL | outcome | actual dep, minutes since midnight |
-| dep_delay | SMALLINT NULL | outcome | minutes |
-| dep_del15 | TINYINT NULL | **target label** | 1 if departure delayed 15+ min |
-| arr_time | SMALLINT NULL | outcome | |
-| arr_delay | SMALLINT NULL | outcome | |
-| arr_del15 | TINYINT NULL | outcome | |
-| actual_elapsed_time | SMALLINT NULL | outcome | |
-| air_time | SMALLINT NULL | outcome | |
-| cancelled | TINYINT NOT NULL DEFAULT 0 | outcome | |
-| cancellation_code | VARCHAR(32) NULL | outcome | free text, e.g. `Not Cancelled` |
-| carrier_delay | SMALLINT NULL | outcome | |
-| weather_delay | SMALLINT NULL | outcome | |
-| nas_delay | SMALLINT NULL | outcome | |
-| security_delay | SMALLINT NULL | outcome | |
-| late_aircraft_delay | SMALLINT NULL | outcome | |
-| created_at | TIMESTAMP | | |
-
-Indexes: `idx_flight_date`, `idx_route_airline (origin, dest, airline)`,
-`idx_origin_hour (origin, crs_dep_time)` for Task 5's congestion aggregate,
-`idx_airline_date (airline, flight_date)` for the temporal split in Task 7.
-
-## Migration 002 — `002_app_schema.sql`
-
-### `users`
-
-| Column | Type | Notes |
+| Column | Type | Description |
 |---|---|---|
-| id | INT PK AUTO_INCREMENT | |
-| email | VARCHAR(255) UNIQUE | |
-| password_hash | VARCHAR(255) | bcryptjs hash, never plaintext |
-| role | ENUM('analyst', 'ops_manager') | |
-| created_at | TIMESTAMP | |
+| `route_id` | `INT`, auto-increment, primary key | Route identifier |
+| `origin_airport_id` | `INT`, foreign key | References `airports.airport_id` |
+| `destination_airport_id` | `INT`, foreign key | References `airports.airport_id` |
 
-### `prediction_log`
+There is a unique constraint on `(origin_airport_id, destination_airport_id)`.
 
-| Column | Type | Notes |
+### `flights`
+
+One row per historical flight.
+
+| Column | Type | Description |
 |---|---|---|
-| id | BIGINT PK AUTO_INCREMENT | |
-| user_id | INT FK → users | |
-| origin_code | VARCHAR(8) | request input |
-| dest_code | VARCHAR(8) | request input |
-| airline_code | VARCHAR(8) | request input |
-| flight_date | DATE | request input |
-| dep_hour_window | VARCHAR(16) | All Day / Morning / Afternoon / Evening |
-| risk_probability | DECIMAL(6,5) | sigmoid output, 0-1 |
-| risk_band | VARCHAR(16) | low / medium / high |
-| model_version | VARCHAR(64) | matches `version` in `analytics/model.json` |
-| created_at | TIMESTAMP | |
+| `flight_id` | `BIGINT`, auto-increment, primary key | Flight identifier |
+| `flight_date` | `DATE`, not null | Local operating date |
+| `airline_id` | `INT`, foreign key | References `airlines.airline_id` |
+| `flight_number` | `INT` | Flight number |
+| `route_id` | `INT`, foreign key | References `routes.route_id` |
+| `scheduled_departure` | `TIME` | Scheduled departure time |
+| `actual_departure` | `TIME` | Actual departure time |
+| `departure_delay` | `INT` | Departure delay in minutes |
+| `departure_del15` | `BOOLEAN` | 1 when departure delay is at least 15 minutes |
+| `scheduled_arrival` | `TIME` | Scheduled arrival time |
+| `actual_arrival` | `TIME` | Actual arrival time |
+| `arrival_delay` | `INT` | Arrival delay in minutes |
+| `arrival_del15` | `BOOLEAN` | 1 when arrival delay is at least 15 minutes |
+| `cancelled` | `BOOLEAN` | Whether the flight was cancelled |
+| `diverted` | `BOOLEAN` | Whether the flight was diverted |
+| `cancellation_code` | `VARCHAR(3)` | Cancellation code |
+| `scheduled_elapsed_time` | `INT` | Scheduled duration in minutes |
+| `actual_elapsed_time` | `INT` | Actual duration in minutes |
+| `air_time` | `INT` | Air time in minutes |
+| `distance` | `INT` | Distance in miles |
+| `carrier_delay` | `INT` | Carrier-caused delay in minutes |
+| `weather_delay` | `INT` | Weather-caused delay in minutes |
+| `nas_delay` | `INT` | National Airspace System delay in minutes |
+| `security_delay` | `INT` | Security delay in minutes |
+| `late_aircraft_delay` | `INT` | Late-aircraft delay in minutes |
 
-## Migration runner notes
+## Derived table
 
-- Checksums are SHA-256 over the raw file content, recorded in
-  `schema_migrations` at apply time.
-- **Atomicity limitation**: MySQL 8 auto-commits before every DDL statement
-  (`CREATE TABLE`, `CREATE INDEX`, etc). A migration file containing DDL is
-  therefore not rollback-able as a unit — if statement 3 of 5 fails,
-  statements 1-2 are already committed. The runner reports the exact
-  statement index on failure so this is visible, not silent. Pure-DML
-  migrations (future seed/data files) run inside a real transaction and do
-  roll back on failure.
-- Applied migrations are immutable. `migrate` compares on-disk checksums
-  against recorded ones for every already-applied file before applying
-  anything new, and aborts if any differ. Corrections go in a new numbered
-  file, never an edit to an applied one.
+### `route_statistics`
 
-## Discovery results (Task 4, run against the full file)
+Precomputed route-level statistics populated by the Workbench data-population
+script. It is useful for faster route reporting, although some current FastAPI
+endpoints still calculate results directly from `flights`.
 
-| Metric | Value |
+| Column | Description |
 |---|---|
-| Total data rows | 5,557,470 |
-| Date range | 2025-01-01 to 2025-10-31 |
-| Distinct airlines | 14 |
-| Distinct airports | 349 |
+| `route_id` | Route identifier and primary key |
+| `total_flights` | All flights on the route |
+| `operated_flights` | Non-cancelled, non-diverted flights |
+| `cancelled_flights` | Cancelled flights |
+| `diverted_flights` | Diverted flights |
+| `delayed_flights` | Operated flights with arrival delay over 15 minutes |
+| `severe_delay_flights` | Operated flights with arrival delay over 60 minutes |
+| `delay_rate` | Route delay percentage |
+| `severe_delay_rate` | Severe-delay percentage |
+| `average_departure_delay` | Average departure delay in minutes |
+| `average_arrival_delay` | Average arrival delay in minutes |
+| `max_arrival_delay` | Maximum arrival delay in minutes |
 
-## Migration 003 — `003_feature_aggregates.sql`
+## Data rules
 
-Historical-rate features computed **strictly over the training window**
-(see boundary below), never the full dataset. Refreshable/truncatable derived
-data, not source-of-truth records — recomputed in full by
-`npm run etl:aggregates` (`src/etl/refresh-aggregates.ts`).
+- Historical pages and prediction evidence use the Workbench database.
+- Live and upcoming airport movements come from Aviationstack through FastAPI;
+  they are not stored in the historical tables.
+- `departure_del15` is the main departure-delay target used by the dashboard.
+- `departure_delay`, `arrival_delay`, cancellation, diversion, and cause-delay
+  fields describe outcomes and must not be treated as pre-departure prediction
+  inputs.
+- `route_id` appears in both `flights` and `routes`; SQL must qualify it as
+  `f.route_id` or `r.route_id` when both tables are joined.
 
-### `agg_route_airline_delay`
+## Related files
 
-Delay rate for a given origin→dest→airline combination.
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INT PK AUTO_INCREMENT | |
-| origin_airport_id | INT FK → dim_airport | |
-| dest_airport_id | INT FK → dim_airport | |
-| airline_id | INT FK → dim_airline | |
-| flight_count | INT | rows in the training window this rate was computed from |
-| delayed_count | INT | of flight_count, how many had `dep_del15 = 1` |
-| delay_rate | DECIMAL(6,5) | `delayed_count / flight_count` |
-| computed_at | TIMESTAMP | |
-
-Unique on `(origin_airport_id, dest_airport_id, airline_id)`.
-
-### `agg_origin_hourly_congestion`
-
-Delay rate for a given origin airport and scheduled departure hour.
-
-| Column | Type | Notes |
-|---|---|---|
-| id | INT PK AUTO_INCREMENT | |
-| origin_airport_id | INT FK → dim_airport | |
-| dep_hour | TINYINT | scheduled departure hour, 0-23, `FLOOR(crs_dep_time / 60)` |
-| flight_count | INT | |
-| delayed_count | INT | |
-| delay_rate | DECIMAL(6,5) | |
-| computed_at | TIMESTAMP | |
-
-Unique on `(origin_airport_id, dep_hour)`.
-
-## Training window boundary (fixed, shared by Task 5 and Task 7)
-
-Defined once in `src/etl/training-window.ts`, imported by both the aggregate
-refresh script and (in Task 7) the Python training script's SQL export, so
-the two can never disagree on where the window ends.
-
-| | |
-|---|---|
-| Full dataset range (Task 4 discovery) | 2025-01-01 to 2025-10-31 |
-| Training window | 2025-01-01 to 2025-08-31 (8 months) |
-| Held-out test period | 2025-09-01 to 2025-10-31 (2 months) |
-
-The split is **temporal, not random** — a random shuffle would let aggregate
-features and the model see the future. `refresh-aggregates.ts` runs an
-explicit leakage guard query after every refresh that re-derives the maximum
-`flight_date` actually used and throws if it is not before the window end,
-so a future accidental change to the query's WHERE clause fails loudly.
+- `Raw SQL & Cleaning/Data Population.sql` - schema and population SQL
+- `SQL Queries/` - queries loaded by FastAPI
+- `FastAPI.py` - database connection and API endpoints
