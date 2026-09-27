@@ -3,7 +3,8 @@ import type { Column } from './DataTable';
 import DataTable from './DataTable';
 import ErrorBanner from './ErrorBanner';
 import { useApiResource } from '../hooks/useApiResource';
-import { count } from '../format';
+import { count, percent } from '../format';
+import { totalFlights, monthsCovered, weightedDelayRate } from '../analytics';
 import {
   fetchDelayCauses,
   fetchHourlyDelayTrends,
@@ -115,7 +116,7 @@ function AnalyticsPage() {
               <button
                 key={view.id}
                 type="button"
-                onClick={() => setActiveView(view.id as any)}
+                onClick={() => setActiveView(view.id as 'trends' | 'causes')}
                 className={`px-4 py-3 rounded-lg text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${
                   FOCUS_VISIBLE
                 } ${
@@ -137,18 +138,18 @@ function AnalyticsPage() {
         {!isLoading && !hasErrors && (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8 animate-slide-in-left">
             <div className={`${PANEL} ${PANEL_PADDING} bg-gradient-to-br from-surface-raised to-surface`}>
-              <div className="text-sm text-ink-dim mb-1">Total data points</div>
+              <div className="text-sm text-ink-dim mb-1">Flights analysed</div>
               <div className="text-2xl font-bold text-ink">
-                {(months.data.length + hours.data.length + causes.data.length).toLocaleString()}
+                {count(totalFlights(months.data))}
               </div>
             </div>
             <div className={`${PANEL} ${PANEL_PADDING} bg-gradient-to-br from-surface-raised to-surface`}>
               <div className="text-sm text-ink-dim mb-1">Time range covered</div>
-              <div className="text-2xl font-bold text-ink">12 months</div>
+              <div className="text-2xl font-bold text-ink">{monthsCovered(months.data)} months</div>
             </div>
             <div className={`${PANEL} ${PANEL_PADDING} bg-gradient-to-br from-surface-raised to-surface`}>
-              <div className="text-sm text-ink-dim mb-1">Analysis frequency</div>
-              <div className="text-2xl font-bold text-ink">Real-time</div>
+              <div className="text-sm text-ink-dim mb-1">Overall delay rate</div>
+              <div className="text-2xl font-bold text-ink">{percent(weightedDelayRate(months.data), 1)}</div>
             </div>
           </div>
         )}
@@ -244,19 +245,19 @@ function AnalyticsPage() {
               {[
                 {
                   title: 'Peak Delay Hours',
-                  content: 'Delays peak between 3-6 PM due to airport congestion and crew scheduling.',
+                  content: 'Delays tend to be highest during afternoon hours when airports are busiest.',
                   Icon: AnalyticsIcons.Clock,
                   color: 'amber'
                 },
                 {
                   title: 'Seasonal Patterns',
-                  content: 'Winter months show 15% higher delays due to weather conditions.',
+                  content: 'Winter months often see more delays due to weather‑related disruptions.',
                   Icon: AnalyticsIcons.Snowflake,
                   color: 'blue'
                 },
                 {
                   title: 'Top Causes',
-                  content: 'Air carrier delays account for 40% of all delays in the network.',
+                  content: 'Air carrier delays are a significant contributor to overall delays.',
                   Icon: AnalyticsIcons.Plane,
                   color: 'good'
                 },
