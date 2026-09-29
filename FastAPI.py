@@ -1,17 +1,21 @@
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from datetime import timedelta, datetime, timezone
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from pathlib import Path
-from datetime import timedelta
+from jose import JWTError, jwt
 from copy import deepcopy
 import mariadb
+import bcrypt
 import httpx
 import os
 import re
 import time
 
-load_dotenv() #Read environment variables from .env file
+
+load_dotenv(".env.example") #Read environment variables from .env file
 
 # =========================================================
 # FastAPI Application
@@ -35,6 +39,46 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# =========================================================
+# Pydantic models
+# =========================================================
+
+class PredictionRequest(BaseModel):
+    originAirportId: int
+    destAirportId: int
+    airlineId: int
+    scheduledDepartureTime: str
+    flightDate: str
+
+class SignupRequest(BaseModel):
+    username: str
+    email: str
+    password: str
+
+class LoginRequest(BaseModel):
+    username: str
+    password: str
+
+class SavedFlightRequest(BaseModel):
+    flight_id: int
+
+class UpdateEmailRequest(BaseModel):
+    email: str
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+class UpcomingSavedFlightRequest(BaseModel):
+    flight_number: int
+    airline_code: str
+    origin: str
+    destination: str
+    flight_date: str
+    scheduled_departure: str | None = None
+    scheduled_arrival: str | None = None
+    flight_status: str | None = None
+
 
 # =========================================================
 # File Paths
@@ -52,11 +96,11 @@ query_cache = {}
 
 def get_connection():
     return mariadb.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),
+        host=os.getenv("DB_HOST"),
         port=int(os.getenv("DB_PORT", "3306")),
-        user=os.getenv("DB_USER", "root"),
-        password=os.getenv("DB_PASSWORD", "GiantTCRPro1"),
-        database=os.getenv("DB_NAME", "group_project")
+        user=os.getenv("DB_USER"),
+        password=os.getenv("DB_PASSWORD"),
+        database=os.getenv("DB_NAME")
     )
 
 
@@ -100,7 +144,7 @@ def get_query(filename, query_name):
 
 
 # =========================================================
-# Database Query Helper
+# Database Query Helper - SELECT Queries
 # =========================================================
 
 def execute_query(query, params=None):
@@ -127,6 +171,33 @@ def execute_query(query, params=None):
     finally:
         cursor.close()
         conn.close()
+
+
+# =========================================================
+# Database Query Helper - INSERT / UPDATE / DELETE (CRUD)
+# =========================================================
+
+def execute_write(query, params=None):
+    conn = get_connection()
+    cursor = conn.cursor()
+
+    try:
+        cursor.execute(query, params or ())
+        conn.commit()
+        query_cache.clear()
+        return cursor.rowcount
+
+    finally:
+        cursor.close()
+        conn.close()
+
+
+# =========================================================
+# API Response Helper
+# =========================================================
+
+def api_success(data):
+    return {"success": True, "data": data}
 
 
 # =========================================================
@@ -160,6 +231,310 @@ def format_time_columns(result):
 
 
 # =========================================================
+# Password Hashing
+# =========================================================
+
+def hash_password(password):
+    return bcrypt.hashpw(
+        password.encode("utf-8"),
+        bcrypt.gensalt()
+    ).decode("utf-8")
+
+
+def verify_password(password, password_hash):
+    return bcrypt.checkpw(
+        password.encode("utf-8"),
+        password_hash.encode("utf-8")
+    )
+
+
+# =========================================================
+# JWT Authentication
+# =========================================================
+
+JWT_SECRET_KEY = os.getenv("JWT_SECRET_KEY")
+JWT_ALGORITHM = "HS256"
+JWT_EXPIRE_MINUTES = 60
+
+security = HTTPBearer()
+
+
+def create_access_token(user_id: int):
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=JWT_EXPIRE_MINUTES
+    )
+
+    payload = {
+        "user_id": user_id,
+        "exp": expire
+    }
+
+    return jwt.encode(
+        payload,
+        JWT_SECRET_KEY,
+        algorithm=JWT_ALGORITHM
+    )
+
+
+def get_current_user(
+    credentials: HTTPAuthorizationCredentials = Depends(security)
+):
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"}
+    )
+
+    token = credentials.credentials
+
+    try:
+        payload = jwt.decode(
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM]
+        )
+
+        user_id = payload.get("user_id")
+
+        if user_id is None:
+            raise credentials_exception
+
+        return user_id
+
+    except JWTError:
+        raise credentials_exception
+
+# =========================================================
+# Account signup
+# =========================================================
+
+@app.post("/signup")
+def signup(request: SignupRequest):
+    password_hash = hash_password(request.password)
+
+    query = get_query("Users.sql", "Signup")
+
+    execute_write(
+        query,
+        (request.username, request.email, password_hash)
+    )
+
+    return {"message": "User created successfully"}
+
+
+# =========================================================
+# Account login
+# =========================================================
+
+@app.post("/login")
+def login(request: LoginRequest):
+    query = get_query("Users.sql", "Login")
+
+    rows = execute_query(
+        query,
+        (request.username,)
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+
+    user = rows[0]
+
+    if not verify_password(
+        request.password,
+        user["password_hash"]
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Invalid username or password"
+        )
+
+    access_token = create_access_token(user["user_id"])
+
+    return {
+        "message": "Login successful",
+        "access_token": access_token,
+        "token_type": "bearer",
+        "user_id": user["user_id"],
+        "username": user["username"],
+        "email": user["email"]
+    }
+
+
+# =========================================================
+# Account CRUD
+# =========================================================
+
+@app.get("/me")
+def get_current_account(
+    current_user: int = Depends(get_current_user)
+):
+    query = get_query("Users.sql", "Get current user")
+    
+    rows = execute_query(
+        query,
+        (current_user,)
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    return rows[0]
+
+
+@app.put("/account/email")
+def update_email(
+    request: UpdateEmailRequest,
+    current_user: int = Depends(get_current_user)
+):
+    check_query = get_query("Users.sql", "Check email")
+
+    existing_email = execute_query(
+        check_query,
+        (
+            request.email,
+            current_user
+        )
+    )
+
+    if existing_email:
+        raise HTTPException(
+            status_code=409,
+            detail="Email is already in use"
+        )
+
+    update_query = get_query("Users.sql", "Update email")
+
+    execute_write(
+        update_query,
+        (
+            request.email,
+            current_user
+        )
+    )
+
+    return {
+        "message": "Email updated successfully",
+        "email": request.email
+    }
+
+
+@app.put("/account/password")
+def change_password(
+    request: ChangePasswordRequest,
+    current_user: int = Depends(get_current_user)
+):
+    get_hash_query = get_query(
+        "Users.sql",
+        "Get password hash"
+    )
+
+    rows = execute_query(
+        get_hash_query,
+        (current_user,)
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    user = rows[0]
+
+    if not verify_password(
+        request.current_password,
+        user["password_hash"]
+    ):
+        raise HTTPException(
+            status_code=401,
+            detail="Current password is incorrect"
+        )
+
+    new_password_hash = hash_password(
+        request.new_password
+    )
+
+    update_query = get_query(
+        "Users.sql",
+        "Update password"
+    )
+
+    execute_write(
+        update_query,
+        (
+            new_password_hash,
+            current_user
+        )
+    )
+
+    return {
+        "message": "Password changed successfully"
+    }
+
+
+@app.delete("/account")
+def delete_account(
+    current_user: int = Depends(get_current_user)
+):
+    check_user_query = get_query(
+        "Users.sql",
+        "Check user"
+    )
+
+    rows = execute_query(
+        check_user_query,
+        (current_user,)
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="User not found"
+        )
+
+    delete_historical_query = get_query(
+        "Users.sql",
+        "Delete historical saved flights when account is deleted"
+    )
+
+    execute_write(
+        delete_historical_query,
+        (current_user,)
+    )
+
+    delete_upcoming_query = get_query(
+        "Users.sql",
+        "Delete upcoming saved flights when account is deleted"
+    )
+
+    execute_write(
+        delete_upcoming_query,
+        (current_user,)
+    )
+
+    delete_user_query = get_query(
+        "Users.sql",
+        "Delete user"
+    )
+
+    execute_write(
+        delete_user_query,
+        (current_user,)
+    )
+
+    return {
+        "message": "Account deleted successfully"
+    }
+
+
+# =========================================================
 # Basic Endpoint
 # =========================================================
 
@@ -173,7 +548,7 @@ def root():
 # Dropdown Endpoints
 # =========================================================
 
-@app.get("/legacy/airlines")
+@app.get("/airlines")
 def get_airlines():
 
     query = get_query(
@@ -184,7 +559,7 @@ def get_airlines():
     return execute_query(query)
 
 
-@app.get("/legacy/airports")
+@app.get("/airports")
 def get_airports():
 
     query = get_query(
@@ -265,6 +640,233 @@ def get_flight_details(
     return format_time_columns(result)
 
 
+@app.get("/history")
+def get_flight_history(
+    airline: str | None = None,
+    origin: str | None = None,
+    destination: str | None = None,
+    limit: int = 200
+):
+    if not (airline or origin or destination):
+        raise HTTPException(
+            status_code=422,
+            detail="Provide airline, origin or destination"
+        )
+
+    filters = []
+    params = []
+
+    if airline:
+        filters.append("a.airline_code = ?")
+        params.append(airline)
+
+    if origin:
+        filters.append("ao.airport_code = ?")
+        params.append(origin)
+
+    if destination:
+        filters.append("ad.airport_code = ?")
+        params.append(destination)
+
+    query = get_query(
+        "Flights.sql",
+        "Flight history"
+    )
+
+    query = query.replace(
+        "{filters}",
+        " AND ".join(filters)
+    )
+
+    query = query.replace(
+        "{limit}",
+        str(max(1, min(limit, 500)))
+    )
+
+    return format_time_columns(
+        execute_query(query, params)
+    )
+
+
+# =========================================================
+# Historical Saved Flights
+# =========================================================
+
+@app.post("/saved-flights")
+def save_flight(
+    request: SavedFlightRequest,
+    current_user: int = Depends(get_current_user)
+):
+    query = get_query(
+        "Historical Saved Flights.sql",
+        "Save Historical Flight"
+    )
+
+    execute_write(
+        query,
+        (
+            current_user,
+            request.flight_id
+        )
+    )
+
+    return {
+        "message": "Flight saved successfully"
+    }
+
+
+@app.get("/saved-flights")
+def get_saved_flights(
+    current_user: int = Depends(get_current_user)
+):
+    query = get_query(
+        "Historical Saved Flights.sql",
+        "Get Historical Saved Flights"
+    )
+
+    return format_time_columns(
+        execute_query(
+            query,
+            (current_user,)
+        )
+    )
+
+
+@app.delete("/saved-flights/{saved_flight_id}")
+def delete_saved_flight(
+    saved_flight_id: int,
+    current_user: int = Depends(get_current_user)
+):
+    check_query = get_query(
+        "Historical Saved Flights.sql",
+        "Check Historical Saved Flight"
+    )
+
+    rows = execute_query(
+        check_query,
+        (
+            saved_flight_id,
+            current_user
+        )
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="Saved flight not found"
+        )
+
+    delete_query = get_query(
+        "Historical Saved Flights.sql",
+        "Delete Historical Saved Flight"
+    )
+
+    execute_write(
+        delete_query,
+        (
+            saved_flight_id,
+            current_user
+        )
+    )
+
+    return {
+        "message": "Saved flight deleted successfully"
+    }
+
+
+# =========================================================
+# Upcoming Saved Flights
+# =========================================================
+
+@app.post("/upcoming-saved-flights")
+def save_upcoming_flight(
+    request: UpcomingSavedFlightRequest,
+    current_user: int = Depends(get_current_user)
+):
+    query = get_query(
+        "Upcoming Saved Flights.sql",
+        "Save Upcoming Flight"
+    )
+
+    execute_write(
+        query,
+        (
+            current_user,
+            request.flight_number,
+            request.airline_code,
+            request.origin,
+            request.destination,
+            request.flight_date,
+            request.scheduled_departure,
+            request.scheduled_arrival,
+            request.flight_status
+        )
+    )
+
+    return {
+        "message": "Upcoming flight saved successfully"
+    }
+
+
+@app.get("/upcoming-saved-flights")
+def get_upcoming_saved_flights(
+    current_user: int = Depends(get_current_user)
+):
+    query = get_query(
+        "Upcoming Saved Flights.sql",
+        "Get Upcoming Saved Flights"
+    )
+
+    return format_time_columns(
+        execute_query(
+            query,
+            (current_user,)
+        )
+    )
+
+
+@app.delete("/upcoming-saved-flights/{upcoming_saved_flight_id}")
+def delete_upcoming_saved_flight(
+    upcoming_saved_flight_id: int,
+    current_user: int = Depends(get_current_user)
+):
+    check_query = get_query(
+        "Upcoming Saved Flights.sql",
+        "Check Upcoming Saved Flight"
+    )
+
+    rows = execute_query(
+        check_query,
+        (
+            upcoming_saved_flight_id,
+            current_user
+        )
+    )
+
+    if not rows:
+        raise HTTPException(
+            status_code=404,
+            detail="Upcoming saved flight not found"
+        )
+
+    delete_query = get_query(
+        "Upcoming Saved Flights.sql",
+        "Delete Upcoming Saved Flight"
+    )
+
+    execute_write(
+        delete_query,
+        (
+            upcoming_saved_flight_id,
+            current_user
+        )
+    )
+
+    return {
+        "message": "Upcoming flight deleted successfully"
+    }
+
+
 # =========================================================
 # Airline Dashboard
 # =========================================================
@@ -322,8 +924,6 @@ def airport_analytics(
         "Data Analytics.sql",
         "Airport Analytics"
     )
-
-    print("Airport Analytics placeholders:", query.count("?"))
 
     return execute_query(
         query,
@@ -417,42 +1017,15 @@ def airline_route_analytics(
 
 
 # =========================================================
-# Prediction Data
+# Aviationstack API Helpers
 # =========================================================
-
-@app.get("/prediction-data")
-def prediction_data(
-    airline: str,
-    origin: str,
-    destination: str
-):
-
-    query = get_query(
-        "Prediction Data.sql",
-        "Prediction Data"
-    )
-
-    return execute_query(
-        query,
-        (
-            airline,
-            origin,
-            destination
-        )
-    )
-
-
-# =========================================================
-# React frontend API contract
-# =========================================================
-
-def api_success(data):
-    return {"success": True, "data": data}
-
 
 def normalize_live_flight(flight, direction):
-    movement = flight.get("departure") if direction == "Departure" else flight.get("arrival")
-    movement = movement or {}
+    departure = flight.get("departure") or {}
+    arrival = flight.get("arrival") or {}
+
+    movement = departure if direction == "Departure" else arrival
+
     airline = flight.get("airline") or {}
     flight_number = flight.get("flight") or {}
     aircraft = flight.get("aircraft") or {}
@@ -463,24 +1036,58 @@ def normalize_live_flight(flight, direction):
         "airline": airline.get("name"),
         "airlineCode": airline.get("iata") or airline.get("icao"),
         "status": flight.get("flight_status"),
-        "airport": movement.get("iata") or movement.get("icao") or movement.get("airport"),
+
+        # Full route
+        "origin": departure.get("iata") or departure.get("icao"),
+        "destination": arrival.get("iata") or arrival.get("icao"),
+
+        # Airport being searched
+        "airport": (
+            movement.get("iata")
+            or movement.get("icao")
+            or movement.get("airport")
+        ),
+
+        # Departure information
+        "scheduledDeparture": departure.get("scheduled"),
+        "revisedDeparture": (
+            departure.get("estimated")
+            or departure.get("actual")
+        ),
+
+        # Arrival information
+        "scheduledArrival": arrival.get("scheduled"),
+        "revisedArrival": (
+            arrival.get("estimated")
+            or arrival.get("actual")
+        ),
+
+        # Keep these for compatibility with existing frontend code
         "scheduledTime": movement.get("scheduled"),
-        "revisedTime": movement.get("estimated") or movement.get("actual"),
+        "revisedTime": (
+            movement.get("estimated")
+            or movement.get("actual")
+        ),
+
         "terminal": movement.get("terminal"),
         "gate": movement.get("gate"),
-        "aircraft": aircraft.get("registration") or aircraft.get("iata"),
+
+        "aircraft": (
+            aircraft.get("registration")
+            or aircraft.get("iata")
+        ),
+
         "latitude": live.get("latitude"),
         "longitude": live.get("longitude"),
-        "lastUpdatedUtc": live.get("updated")
+        "lastUpdatedUtc": live.get("updated"),
+
+        # Delay
+        "delay": (
+            departure.get("delay")
+            if direction == "Departure"
+            else arrival.get("delay")
+        ),
     }
-
-
-class PredictionRequest(BaseModel):
-    originAirportId: int
-    destAirportId: int
-    airlineId: int
-    scheduledDepartureTime: str
-    flightDate: str
 
 
 @app.get("/live-flights")
@@ -495,7 +1102,6 @@ async def live_flights(
     base_url = os.getenv("AVIATIONSTACK_BASE_URL", "http://api.aviationstack.com/v1").rstrip("/")
     params = {
         "access_key": api_key,
-        "flight_status": "scheduled",
         "limit": 100,
         "offset": 0,
         ("dep_iata" if direction == "Departure" else "arr_iata"): airport.upper()
@@ -528,104 +1134,143 @@ def api_health():
     return api_success({"status": "ok"})
 
 
+# =========================================================
+# Dashboard Statistics
+# =========================================================
+
 @app.get("/summary")
 def api_summary():
-    query = """
-        SELECT COUNT(*) AS totalFlights,
-               COALESCE(SUM(departure_del15), 0) AS totalDelayed,
-               COALESCE(AVG(departure_del15), 0) AS avgDelayRate,
-               COUNT(DISTINCT f.route_id) AS routeCount,
-               COUNT(DISTINCT r.origin_airport_id) AS airportCount,
-               COUNT(DISTINCT airline_id) AS airlineCount
-        FROM flights f
-        JOIN routes r ON r.route_id = f.route_id
-    """
+    query = get_query(
+        "Dashboard.sql",
+        "Summary"
+    )
+
     row = execute_query(query)[0]
-    row["avgDelayRate"] = float(row["avgDelayRate"] or 0)
+
+    row["avgDelayRate"] = float(
+        row["avgDelayRate"] or 0
+    )
+
     return api_success(row)
 
 
-@app.get("/airports")
-def api_airports():
-    query = """
-        SELECT airport_id AS id, airport_code AS code, city_name AS cityName
-        FROM airports ORDER BY airport_code
-    """
-    return api_success(execute_query(query))
-
-
-@app.get("/airlines/list")
-def api_airlines_list():
-    query = """
-        SELECT airline_id AS id, airline_code AS code
-        FROM airlines ORDER BY airline_code
-    """
-    return api_success(execute_query(query))
-
-
-@app.get("/airlines")
-def api_route_performance(
+@app.get("/airlines/performance")
+def api_airline_performance(
     airlineId: int | None = None,
     originId: int | None = None,
     limit: int = 10
 ):
     filters = []
     params = []
+
     if airlineId is not None:
         filters.append("f.airline_id = ?")
         params.append(airlineId)
+
     if originId is not None:
         filters.append("r.origin_airport_id = ?")
         params.append(originId)
 
-    where = f"WHERE {' AND '.join(filters)}" if filters else ""
-    query = f"""
-        SELECT a.airline_code AS airlineCode,
-               ao.airport_code AS originCode,
-               ao.city_name AS originCity,
-               ad.airport_code AS destCode,
-               COUNT(*) AS flightCount,
-               COALESCE(SUM(f.departure_del15), 0) AS delayedCount,
-               COALESCE(AVG(f.departure_del15), 0) AS delayRate
-        FROM flights f
-        JOIN airlines a ON a.airline_id = f.airline_id
-        JOIN routes r ON r.route_id = f.route_id
-        JOIN airports ao ON ao.airport_id = r.origin_airport_id
-        JOIN airports ad ON ad.airport_id = r.destination_airport_id
-        {where}
-        GROUP BY a.airline_code, ao.airport_code, ao.city_name, ad.airport_code
-        ORDER BY flightCount DESC
-        LIMIT {max(1, min(limit, 100))}
-    """
+    where = (
+        f"WHERE {' AND '.join(filters)}"
+        if filters
+        else ""
+    )
+
+    query = get_query(
+        "Dashboard.sql",
+        "Airline Performance"
+    )
+
+    query = query.replace(
+        "{filters}",
+        where
+    )
+
+    query = query.replace(
+        "{limit}",
+        str(max(1, min(limit, 100)))
+    )
+
     rows = execute_query(query, params)
+
     for row in rows:
-        row["delayRate"] = float(row["delayRate"] or 0)
+        row["delayRate"] = float(
+            row["delayRate"] or 0
+        )
+
     return api_success(rows)
 
 
 @app.get("/airports/congestion")
-def api_congestion(airportId: int | None = None, limit: int = 24):
-    where = "WHERE r.origin_airport_id = ?" if airportId is not None else ""
-    params = (airportId,) if airportId is not None else ()
-    query = f"""
-        SELECT ao.airport_code AS airportCode,
-               ao.city_name AS airportCity,
-               HOUR(f.scheduled_departure) AS depHour,
-               COUNT(*) AS flightCount,
-               COALESCE(SUM(f.departure_del15), 0) AS delayedCount,
-               COALESCE(AVG(f.departure_del15), 0) AS delayRate
-        FROM flights f
-        JOIN routes r ON r.route_id = f.route_id
-        JOIN airports ao ON ao.airport_id = r.origin_airport_id
-        {where}
-        GROUP BY ao.airport_code, ao.city_name, HOUR(f.scheduled_departure)
-        ORDER BY flightCount DESC
-        LIMIT {max(1, min(limit, 100))}
-    """
+def api_congestion(
+    airportId: int | None = None,
+    limit: int = 24
+):
+    filters = []
+    params = []
+
+    if airportId is not None:
+        filters.append(
+            "r.origin_airport_id = ?"
+        )
+        params.append(airportId)
+
+    where = (
+        f"WHERE {' AND '.join(filters)}"
+        if filters
+        else ""
+    )
+
+    query = get_query(
+        "Dashboard.sql",
+        "Airport Congestion"
+    )
+
+    query = query.replace(
+        "{filters}",
+        where
+    )
+
+    query = query.replace(
+        "{limit}",
+        str(max(1, min(limit, 100)))
+    )
+
     rows = execute_query(query, params)
+
     for row in rows:
-        row["delayRate"] = float(row["delayRate"] or 0)
+        row["delayRate"] = float(
+            row["delayRate"] or 0
+        )
+
     return api_success(rows)
+
+
+# =========================================================
+# Prediction Data
+# =========================================================
+
+@app.get("/prediction-data")
+def prediction_data(
+    airline: str,
+    origin: str,
+    destination: str
+):
+
+    query = get_query(
+        "Prediction Data.sql",
+        "Prediction Data"
+    )
+
+    return execute_query(
+        query,
+        (
+            airline,
+            origin,
+            destination
+        )
+    )
 
 
 @app.post("/predict")
@@ -633,39 +1278,109 @@ def api_predict(request: PredictionRequest):
     try:
         hour = int(request.scheduledDepartureTime[:2])
     except (TypeError, ValueError):
-        raise HTTPException(status_code=422, detail="scheduledDepartureTime must be HHMM")
+        raise HTTPException(
+            status_code=422,
+            detail="scheduledDepartureTime must be HHMM"
+        )
 
-    route_query = """
-        SELECT AVG(f.departure_del15) AS delayRate
-        FROM flights f JOIN routes r ON r.route_id = f.route_id
-        WHERE r.origin_airport_id = ?
-          AND r.destination_airport_id = ?
-          AND f.airline_id = ?
-    """
-    hourly_query = """
-        SELECT AVG(f.departure_del15) AS delayRate
-        FROM flights f JOIN routes r ON r.route_id = f.route_id
-        WHERE r.origin_airport_id = ?
-          AND HOUR(f.scheduled_departure) = ?
-    """
-    route_rate = execute_query(route_query, (
-        request.originAirportId,
-        request.destAirportId,
-        request.airlineId
-    ))[0]["delayRate"]
-    hourly_rate = execute_query(hourly_query, (
-        request.originAirportId,
-        hour
-    ))[0]["delayRate"]
+    # Route delay rate
+    route_query = get_query(
+        "Prediction Data.sql",
+        "Route delay rate"
+    )
+
+    route_result = execute_query(
+        route_query,
+        (
+            request.originAirportId,
+            request.destAirportId,
+            request.airlineId
+        )
+    )
+
+    route_rate = (
+        route_result[0]["delayRate"]
+        if route_result
+        else None
+    )
+
+    # Hourly delay rate
+    hourly_query = get_query(
+        "Prediction Data.sql",
+        "Hourly delay rate"
+    )
+
+    hourly_result = execute_query(
+        hourly_query,
+        (
+            request.originAirportId,
+            hour
+        )
+    )
+
+    hourly_rate = (
+        hourly_result[0]["delayRate"]
+        if hourly_result
+        else None
+    )
+
+    # Detailed prediction data
+    prediction_query = get_query(
+        "Prediction Data.sql",
+        "Prediction Data"
+    )
+
+    prediction_result = execute_query(
+        prediction_query,
+        (
+            request.airlineId,
+            request.originAirportId,
+            request.destAirportId
+        )
+    )
+
+    detailed_data = (
+        prediction_result[0]
+        if prediction_result
+        else None
+    )
+
+    # Calculate prediction score
+    rates = [
+        rate for rate in (
+            route_rate,
+            hourly_rate
+        )
+        if rate is not None
+    ]
+
+    score = (
+        float(sum(rates) / len(rates))
+        if rates
+        else 0.0
+    )
+
     historical = {
-        "routeDelayRate": float(route_rate) if route_rate is not None else None,
-        "hourlyDelayRate": float(hourly_rate) if hourly_rate is not None else None
+        "routeDelayRate": (
+            float(route_rate)
+            if route_rate is not None
+            else None
+        ),
+        "hourlyDelayRate": (
+            float(hourly_rate)
+            if hourly_rate is not None
+            else None
+        ),
+        "predictionData": detailed_data
     }
-    rates = [rate for rate in (route_rate, hourly_rate) if rate is not None]
-    score = float(sum(rates) / len(rates)) if rates else 0.0
+
     return api_success({
         "score": score,
-        "label": "DELAYED" if score >= 0.5 else "ON_TIME",
+        "label": (
+            "DELAYED"
+            if score >= 0.5
+            else "ON_TIME"
+        ),
         "modelVersion": "historical-rate-v1",
         "historical": historical
     })

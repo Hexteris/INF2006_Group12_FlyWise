@@ -15,6 +15,7 @@ export default {
         bg: '#0B1B2B',
         surface: '#122540',
         'surface-raised': '#17304F',
+        input: '#1A3553',
         line: '#24405F',
         ink: '#EAF0F6',
         'ink-dim': '#94A7BD',

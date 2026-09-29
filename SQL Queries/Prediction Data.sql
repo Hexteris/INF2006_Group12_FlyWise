@@ -1,5 +1,19 @@
--- Prediction Data --
+-- Route delay rate --
+SELECT AVG(f.departure_del15) AS delayRate
+FROM flights f
+JOIN routes r ON r.route_id = f.route_id
+WHERE r.origin_airport_id = ?
+  AND r.destination_airport_id = ?
+  AND f.airline_id = ?
 
+-- Hourly delay rate --
+SELECT AVG(f.departure_del15) AS delayRate
+FROM flights f
+JOIN routes r ON r.route_id = f.route_id
+WHERE r.origin_airport_id = ?
+  AND HOUR(f.scheduled_departure) = ?
+
+-- Prediction Data --
 SELECT
 	a.airline_code,
 
@@ -48,9 +62,9 @@ JOIN airports ao
 JOIN airports ad
 	ON r.destination_airport_id = ad.airport_id
 
-WHERE a.airline_code = ?
-  AND ao.airport_code = ?
-  AND ad.airport_code = ?
+WHERE f.airline_id = ?
+  AND r.origin_airport_id = ?
+  AND r.destination_airport_id = ?
 
 GROUP BY
 	a.airline_code,
