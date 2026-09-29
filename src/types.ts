@@ -133,43 +133,41 @@ export interface LiveFlightRow {
   airlineCode: string | null;
   status: string | null;
   airport: string | null;
+  origin?: string | null;
+  destination?: string | null;
   scheduledTime: string | null;
   revisedTime: string | null;
+  scheduledDeparture?: string | null;
+  revisedDeparture?: string | null;
+  scheduledArrival?: string | null;
+  revisedArrival?: string | null;
+  delay?: number | null;
   terminal: string | null;
   gate: string | null;
   aircraft: string | null;
   latitude: number | null;
   longitude: number | null;
   lastUpdatedUtc: string | null;
+  flightNumber?: string | number | null;
 }
 
-// Authentication types
-export interface User {
-  id: number;
-  email: string;
-  name: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
-
+export type Page = 'live' | 'analytics' | 'predict';
+export interface User { id: number; username: string; email: string }
 export interface AuthResponse {
-  token: string;
-  user: User;
+  message: string; access_token: string; token_type: string;
+  user_id: number; username: string; email: string;
 }
-
-export interface LoginRequest {
-  email: string;
-  password: string;
+export interface UpcomingSavedBody {
+  flight_number: number; airline_code: string; origin: string; destination: string;
+  flight_date: string; scheduled_departure: string | null;
+  scheduled_arrival: string | null; flight_status: string | null;
 }
-
-export interface SignupRequest {
-  email: string;
-  password: string;
-  name?: string;
+export interface SavedUpcomingRow extends UpcomingSavedBody {
+  upcoming_saved_flight_id: number; saved_at: string;
 }
-
-export interface UpdateProfileRequest {
-  email?: string;
-  password?: string;
-  name?: string;
+export interface HistoryRow {
+  flight_id: number; flight_date: string; airline_code: string;
+  flight_number: number | null; origin: string; destination: string;
+  scheduled_departure: string | null;
+  departure_delay: number | null; arrival_delay: number | null;
 }

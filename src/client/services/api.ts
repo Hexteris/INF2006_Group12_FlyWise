@@ -8,81 +8,62 @@
 // Response types come from src/types.ts, the same file the server builds them
 // from, so the two sides cannot drift.
 import type {
-  ApiEnvelope,
-  Summary,
-  RoutePerformanceRow,
-  CongestionRow,
-  DimRow,
-  PredictionRequest,
-  PredictionResult,
-  FlightSearchRow,
-  MonthlyTrendRow,
-  HourlyTrendRow,
-  DelayCauseRow,
-  LiveFlightRow,
-  User,
-  AuthResponse,
-  LoginRequest,
-  SignupRequest,
-  UpdateProfileRequest,
+  ApiEnvelope, Summary, RoutePerformanceRow, CongestionRow, DimRow,
+  PredictionRequest, PredictionResult, FlightSearchRow, MonthlyTrendRow,
+  HourlyTrendRow, DelayCauseRow, LiveFlightRow,
+  AuthResponse, SavedUpcomingRow, UpcomingSavedBody, HistoryRow,
 } from '../../types';
 
 const BASE = import.meta.env.VITE_API_URL?.replace(/\/$/, '') ?? '';
 type ApiRow = Record<string, unknown>;
 
-/**
- * Unwraps the ApiEnvelope so callers receive `T` directly and never have to
- * check `success` themselves. A failed request throws, which is what lets
- * useApiResource report an error message instead of rendering an empty table.
- */
-async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  let envelope: ApiEnvelope<T>;
+let token: string | null = localStorage.getItem('flywise_token');
+export const hasToken = () => token !== null;
+export function setToken(t: string | null) {
+  token = t;
+  if (t) localStorage.setItem('flywise_token', t);
+  else localStorage.removeItem('flywise_token');
+}
 
+/** One fetch wrapper: adds the Bearer token and surfaces FastAPI `detail` errors. */
+async function http<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
   const response = await fetch(`${BASE}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
     ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...options.headers,
+    },
   });
-
+  let body: unknown;
   try {
-    envelope = (await response.json()) as ApiEnvelope<T>;
+    body = await response.json();
   } catch {
-    // A non-JSON body means something upstream answered instead of the API
-    // (a proxy error page, for example). Report the status rather than a
-    // confusing JSON parse error.
     throw new Error(`Unexpected non-JSON response (HTTP ${response.status})`);
   }
-
   if (!response.ok) {
-    const error = 'error' in envelope && envelope.error ? envelope.error : `Request failed: HTTP ${response.status}`;
-    throw new Error(error);
+    const b = body as { detail?: unknown; error?: string };
+    throw new Error(
+      (typeof b.detail === 'string' ? b.detail : b.error) ?? `Request failed: HTTP ${response.status}`
+    );
   }
-  if (!envelope.success) {
-    throw new Error(envelope.error);
-  }
+  return body as T;
+}
 
+/** For routes wrapped in { success, data }. */
+async function request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+  const envelope = await http<ApiEnvelope<T>>(endpoint, options);
+  if (!envelope.success) throw new Error(envelope.error);
   return envelope.data;
 }
 
-/** Reads older FastAPI routes that return rows directly rather than envelopes. */
-async function requestRaw<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
-  const response = await fetch(`${BASE}${endpoint}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
-    ...options,
-  });
+/** For older routes that return rows directly. */
+const requestRaw = http;
 
-  if (!response.ok) {
-    throw new Error(`Request failed: HTTP ${response.status}`);
-  }
-
-  return (await response.json()) as T;
-}
-
-/** Serialises defined, non-empty params into a query string. */
 function query(params: Record<string, string | number | undefined>): string {
   const entries = Object.entries(params)
-    .filter(([, value]) => value !== undefined && value !== '')
-    .map(([key, value]) => [key, String(value)]);
-
+    .filter(([, v]) => v !== undefined && v !== '')
+    .map(([k, v]) => [k, String(v)]);
   return entries.length > 0 ? `?${new URLSearchParams(entries).toString()}` : '';
 }
 
@@ -95,16 +76,34 @@ export const fetchRoutePerformance = (
 export const fetchCongestion = (params: { airportId?: number; limit?: number } = {}) =>
   request<CongestionRow[]>(`/airports/congestion${query(params)}`);
 
-export const fetchAirports = () => request<DimRow[]>('/airports');
+export const fetchAirports = async (): Promise<DimRow[]> => {
+  const rows = await requestRaw<Array<{
+    airport_id: number;
+    airport_code: string;
+    city_name?: string | null;
+  }>>('/airports');
 
-export const fetchAirlines = () => request<DimRow[]>('/airlines/list');
+  return rows.map((row) => ({
+    id: row.airport_id,
+    code: row.airport_code,
+    cityName: row.city_name,
+  }));
+};
+
+export const fetchAirlines = async (): Promise<DimRow[]> => {
+  const rows = await requestRaw<Array<{
+    airline_id: number;
+    airline_code: string;
+  }>>('/airlines');
+
+  return rows.map((row) => ({
+    id: row.airline_id,
+    code: row.airline_code,
+  }));
+};
 
 export const submitPrediction = (body: PredictionRequest) =>
   request<PredictionResult>('/predict', { method: 'POST', body: JSON.stringify(body) });
-
-export const fetchLegacyAirlines = () => requestRaw<ApiRow[]>('/legacy/airlines');
-
-export const fetchLegacyAirports = () => requestRaw<ApiRow[]>('/legacy/airports');
 
 export const fetchRoutes = (origin: string) =>
   requestRaw<ApiRow[]>(`/routes${query({ origin })}`);
@@ -152,33 +151,21 @@ export const fetchLiveFlights = (
   direction: 'Departure' | 'Arrival' = 'Departure'
 ) => request<LiveFlightRow[]>(`/live-flights${query({ airport, direction })}`);
 
-// Auth API functions
-export const authLogin = (credentials: LoginRequest) =>
-  request<AuthResponse>('/auth/login', {
-    method: 'POST',
-    body: JSON.stringify(credentials),
-  });
+// ---- auth ----
+export const login = (username: string, password: string) =>
+  http<AuthResponse>('/login', { method: 'POST', body: JSON.stringify({ username, password }) });
+export const signup = (username: string, email: string, password: string) =>
+  http<{ message: string }>('/signup', { method: 'POST', body: JSON.stringify({ username, email, password }) });
+export const fetchMe = () =>
+  http<{ user_id: number; username: string; email: string }>('/me');
 
-export const authSignup = (userData: SignupRequest) =>
-  request<AuthResponse>('/auth/signup', {
-    method: 'POST',
-    body: JSON.stringify(userData),
-  });
+// ---- saved upcoming flights ----
+export const fetchUpcomingSaved = () => http<SavedUpcomingRow[]>('/upcoming-saved-flights');
+export const saveUpcoming = (body: UpcomingSavedBody) =>
+  http<{ message: string }>('/upcoming-saved-flights', { method: 'POST', body: JSON.stringify(body) });
+export const deleteUpcoming = (id: number) =>
+  http<{ message: string }>(`/upcoming-saved-flights/${id}`, { method: 'DELETE' });
 
-export const authMe = (token: string) =>
-  request<User>('/auth/me', {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-
-export const authUpdateProfile = (token: string, updates: UpdateProfileRequest) =>
-  request<User>('/auth/me', {
-    method: 'PATCH',
-    headers: { Authorization: `Bearer ${token}` },
-    body: JSON.stringify(updates),
-  });
-
-export const authDeleteAccount = (token: string) =>
-  request<{ success: true }>('/auth/me', {
-    method: 'DELETE',
-    headers: { Authorization: `Bearer ${token}` },
-  });
+// ---- historical flights (backend patch 2) ----
+export const fetchHistory = (p: { airline?: string; origin?: string; destination?: string; limit?: number }) =>
+  http<HistoryRow[]>(`/history${query(p)}`);

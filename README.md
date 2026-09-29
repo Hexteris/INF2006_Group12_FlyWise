@@ -28,20 +28,17 @@ called only by `GET /live-flights` when a user manually loads the Live Flights p
 
 ## Prerequisites
 
-- Python 3.13 or compatible Python version
-- Node.js and npm
-- MySQL/MariaDB and MySQL Workbench
-- A database named `group_project` containing `airlines`, `airports`, `routes`, and `flights`
-- An Aviationstack API key for local live-flight testing
+* Python 3.13+
+* Node.js and npm
+* MySQL/MariaDB and MySQL Workbench
+* Database: `group_project`
+* Aviationstack API key
 
-The database is not stored in Git. Share a sanitized schema/data setup script separately;
-never commit database passwords or API keys.
+Database credentials and API keys must not be committed to Git.
 
 ## Run Locally
 
-Run the backend and frontend in separate terminals from this directory.
-
-### Terminal 1: FastAPI
+### Backend
 
 ```powershell
 python -m venv .venv
@@ -51,15 +48,15 @@ python -m pip install -r requirements.txt
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
 $env:DB_USER = "root"
-$env:DB_PASSWORD = "<your-workbench-password>"
+$env:DB_PASSWORD = "<your-password>"
 $env:DB_NAME = "group_project"
-$env:AVIATIONSTACK_API_KEY = "<your-aviationstack-key>"
+$env:AVIATIONSTACK_API_KEY = "<your-api-key>"
 $env:AVIATIONSTACK_BASE_URL = "http://api.aviationstack.com/v1"
 
 python -m uvicorn FastAPI:app --reload --port 8000
 ```
 
-### Terminal 2: React
+### Frontend
 
 ```powershell
 npm install
@@ -145,12 +142,13 @@ The FlyWise platform implements a **partial-gate authentication system** where m
 ```text
 GET  /summary
 GET  /airports
-GET  /airlines/list
 GET  /airlines
 GET  /airports/congestion
 POST /predict
+
 GET  /flights
 GET  /flights/{flight_id}
+
 GET  /analytics/...
 GET  /live-flights?airport=JFK&direction=Departure
 ```
@@ -180,28 +178,20 @@ python -m py_compile FastAPI.py
 
 ## AWS Deployment
 
-Recommended split:
-
 ```text
-React build       -> S3 + CloudFront
-FastAPI container  -> App Runner or ECS/Fargate
-Database           -> Amazon RDS for MySQL/MariaDB
+React build  -> S3 + CloudFront
+FastAPI      -> App Runner / ECS
+Database     -> Amazon RDS
 ```
 
-Build the FastAPI image:
-
-```powershell
-docker build -t flywise-api .
-```
-
-Build the frontend for the deployed API:
+Frontend production build:
 
 ```powershell
 $env:VITE_API_URL = "https://<your-fastapi-service-url>"
 npm run build
 ```
 
-Configure these variables in the AWS service, preferably through AWS Secrets Manager:
+Configure these environment variables on the backend:
 
 ```text
 DB_HOST
@@ -210,13 +200,14 @@ DB_USER
 DB_PASSWORD
 DB_NAME
 AVIATIONSTACK_API_KEY
+AVIATIONSTACK_BASE_URL
 FRONTEND_ORIGIN
 ```
 
 ## Important Files
 
 ```text
-FastAPI.py                  FastAPI backend and database/API routes
+FastAPI.py                  FastAPI backend
 requirements.txt            Python dependencies
 SQL Queries/                SQL used by the backend
 src/client/                 React pages and components

@@ -60,7 +60,7 @@ export const FIELD_CLASSES =
   'aria-invalid:border-bad aria-invalid:ring-bad/30 aria-invalid:focus:border-bad';
 
 /** Enhanced field label styling with better spacing and accessibility */
-export const FIELD_LABEL = 'block text-sm font-semibold text-ink-dim mb-2 tracking-wide';
+export const FIELD_LABEL = 'block text-sm font-semibold text-ink mb-2 tracking-wide';
 
 /** Skeleton loading animation for async content */
 export const SKELETON_CLASSES = 'animate-pulse bg-surface-raised text-transparent rounded select-none';
@@ -117,4 +117,4 @@ export const GRID_FORM = 'grid grid-cols-1 md:grid-cols-2 gap-6';
 export const TEXT_XL = 'text-2xl md:text-3xl font-bold tracking-tight text-ink';
 export const TEXT_LG = 'text-xl md:text-2xl font-semibold text-ink';
 export const TEXT_MD = 'text-base md:text-lg font-medium text-ink';
-export const TEXT_SM = 'text-sm md:text-base font-normal text-ink-dim';
+export const TEXT_SM = 'text-sm md:text-base font-normal text-ink';

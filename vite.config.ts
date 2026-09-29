@@ -37,3 +37,11 @@ export default defineConfig({
     emptyOutDir: true,
   },
 });
+
+
+const API = ["/summary","/airports","/airlines","/live-flights","/predict","/analytics",
+  "/flights","/routes","/legacy","/prediction-data","/signup","/login","/me",
+  "/saved-flights","/upcoming-saved-flights","/account","/history","/health"];
+
+// inside defineConfig({ ... })
+server: { proxy: Object.fromEntries(API.map((p) => [p, "http://localhost:8000"])) }

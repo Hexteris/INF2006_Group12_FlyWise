@@ -93,7 +93,7 @@ function DataTable<T>({
                   <th
                     key={column.label}
                     scope="col"
-                    className={`px-6 py-3.5 text-xs font-semibold text-ink-dim uppercase tracking-wider transition-colors duration-200 hover:text-ink ${
+                    className={`px-6 py-3.5 text-xs font-semibold text-ink uppercase tracking-wider transition-colors duration-200 hover:text-ink ${
                       column.numeric ? 'text-right' : 'text-left'
                     } ${column.hideOnMobile ? DESKTOP_ONLY : ''}`}
                     style={column.minWidth ? { minWidth: column.minWidth } : undefined}
@@ -145,7 +145,7 @@ function DataTable<T>({
                 <tr>
                   <td 
                     colSpan={visibleColumns.length} 
-                    className="px-6 py-12 text-center text-ink-dim/70"
+                    className="px-6 py-12 text-center text-ink"
                   >
                     <div className="flex flex-col items-center justify-center gap-3">
                       <svg 
@@ -178,7 +178,7 @@ function DataTable<T>({
                         className={`px-6 py-4 whitespace-nowrap text-sm transition-colors duration-200 group-hover:text-ink ${
                           column.numeric 
                             ? 'text-right tabular-nums font-mono font-medium text-ink group-hover:text-amber' 
-                            : 'text-left text-ink-dim group-hover:text-ink'
+                            : 'text-left text-ink group-hover:text-ink'
                         } ${column.hideOnMobile ? DESKTOP_ONLY : ''}`}
                       >
                         <div className={`inline-flex items-center gap-2 ${FOCUS_VISIBLE}`} tabIndex={0}>

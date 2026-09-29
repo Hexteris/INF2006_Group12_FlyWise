@@ -110,7 +110,7 @@ function DashboardCard({
           className={`h-2.5 w-2.5 rounded-full ${palette.dot} transition-transform duration-300 hover:scale-125`} 
           aria-hidden="true" 
         />
-        <h3 className="font-semibold text-sm md:text-base text-ink-dim tracking-wide">
+        <h3 className="font-semibold text-sm md:text-base text-ink tracking-wide">
           {isLoading ? (
             <span className={`${SKELETON_CLASSES} w-24 h-4 block`} aria-label="Loading title">
               {title}

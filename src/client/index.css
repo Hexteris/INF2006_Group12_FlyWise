@@ -11,10 +11,21 @@
 @tailwind utilities;
 
 :root {
+  /* FlyWise colour palette */
+  --color-bg: #0B1B2B;
+  --color-surface: #122540;
+  --color-surface-raised: #17304F;
+  --color-input: #1A3553;
+  --color-line: #24405F;
+  --color-ink: #EAF0F6;
+  --color-ink-dim: #94A7BD;
+  --color-amber: #FFB020;
+  --color-good: #4CAF7D;
+  --color-bad: #E5595F;
+
+  /* Dark mode color scheme*/
   font-family: 'IBM Plex Sans', system-ui, -apple-system, sans-serif;
   line-height: 1.5;
-  /* Dark theme, ported from the prototype: native form controls (date/time
-     pickers, select popups) render with dark chrome instead of white. */
   color-scheme: dark;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -26,24 +37,19 @@
   scrollbar-color: #24405F #0B1B2B;
 }
 
-/*
- * No flex centring here. The previous rule (`display: flex; place-items: center`)
- * came from the Vite starter template and fought the full-width dashboard layout,
- * vertically centring the whole page against its own min-height.
- */
 body {
   margin: 0;
   min-width: 320px;
   min-height: 100vh;
-  background-color: #0B1B2B;
-  color: #EAF0F6;
+  background-color: var(--color-bg);
+  color: var(--color-ink);
   overflow-x: hidden;
   position: relative;
 }
 
 /* Enhanced focus styles for better accessibility */
 *:focus-visible {
-  outline: 3px solid #FFB020;
+  outline: 3px solid var(--color-amber);
   outline-offset: 2px;
   border-radius: 0.25rem;
 }
@@ -55,14 +61,14 @@ body {
 }
 
 ::-webkit-scrollbar-track {
-  background: #0B1B2B;
+  background: var(--color-bg);
   border-radius: 5px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #24405F;
+  background: var(--color-line);
   border-radius: 5px;
-  border: 2px solid #0B1B2B;
+  border: 2px solid var(--color-bg);
 }
 
 ::-webkit-scrollbar-thumb:hover {
@@ -70,7 +76,7 @@ body {
 }
 
 ::-webkit-scrollbar-corner {
-  background: #0B1B2B;
+  background: var(--color-bg);
 }
 
 /* Custom animations */
@@ -206,8 +212,8 @@ body {
 
 /* Enhanced selection styling */
 ::selection {
-  background-color: #FFB020;
-  color: #0B1B2B;
+  background-color: var(--color-amber);
+  color: var(--color-bg);
 }
 
 /* Print styles */
@@ -249,12 +255,5 @@ body {
   
   button, a {
     outline: 2px solid currentColor;
-  }
-}
-
-/* Dark mode fallback (already dark theme) */
-@media (prefers-color-scheme: dark) {
-  :root {
-    color-scheme: dark;
   }
 }
