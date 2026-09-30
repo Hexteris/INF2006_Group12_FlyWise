@@ -15,12 +15,15 @@ coverage/
 # Environment variables
 __pycache__/
 *.py[cod]
+.env
 .env.*
+!.env.example
 
-# Source data - flight_project_cleaned.csv is ~895 MB. Never commit it.
-# Obtain it separately and place it in the repo root; see data/DATA_DICTIONARY.md.
+# Full source data lives in data/raw/ (flight_project_cleaned.csv is ~895 MB). Never commit it; see data/DATA_DICTIONARY.md.
 flight_project_cleaned.csv
 *.csv
+data/raw/
+!data/*.csv
 
 # Agent/debug scratch output
 .logs/

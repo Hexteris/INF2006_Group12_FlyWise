@@ -38,30 +38,29 @@ Database credentials and API keys must not be committed to Git.
 
 ## Run Locally
 
-### Backend
+All application code lives in `src/`. Run every command below from inside `src/`
+so the `.env` files resolve.
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+cd src
+Copy-Item .env.example .env        # then fill in real values
 
-$env:DB_HOST = "127.0.0.1"
-$env:DB_PORT = "3306"
-$env:DB_USER = "root"
-$env:DB_PASSWORD = "<your-password>"
-$env:DB_NAME = "group_project"
-$env:AVIATIONSTACK_API_KEY = "<your-api-key>"
-$env:AVIATIONSTACK_BASE_URL = "http://api.aviationstack.com/v1"
-
-python -m uvicorn FastAPI:app --reload --port 8000
-```
-
-### Frontend
-
-```powershell
+# Frontend (dev)
 npm install
-npm run dev
+npm run dev                        # http://localhost:3000, proxies API to :8000
+
+# Backend (run from inside src/ so .env files resolve)
+python -m venv ../.venv
+../.venv/Scripts/Activate.ps1      # Windows; use `source ../.venv/bin/activate` on Linux
+pip install -r requirements.txt
+uvicorn FastAPI:app --host 0.0.0.0 --port 8000
+
+# Docker (build context is src/)
+docker build -t flywise .
+docker run --env-file .env -p 8000:8000 flywise
 ```
+
+The full source CSVs are not committed. Place them in `data/raw/`.
 
 Open <http://localhost:3000>. FastAPI documentation is available at
 <http://localhost:8000/docs>.
@@ -171,6 +170,7 @@ Live Flights uses manual refresh rather than automatic polling.
 ## Checks
 
 ```powershell
+cd src
 npm run type-check
 npm run lint
 python -m py_compile FastAPI.py
@@ -207,16 +207,17 @@ FRONTEND_ORIGIN
 ## Important Files
 
 ```text
-FastAPI.py                  FastAPI backend
-requirements.txt            Python dependencies
-SQL Queries/                SQL used by the backend
+src/FastAPI.py              FastAPI backend
+src/requirements.txt        Python dependencies
+src/.env.example            Environment variable template (placeholders only)
+src/SQL Queries/            SQL used by the backend
 src/client/                 React pages and components
 src/client/services/api.ts  Frontend API client (includes auth API)
 src/client/context/AuthContext.tsx  Authentication state management
 src/client/components/AuthModal.tsx         Login/signup modal
 src/client/components/AccountSettingsModal.tsx  User account management
 src/types.ts                TypeScript interfaces (includes auth types)
-vite.config.ts              Development proxy and build settings (includes auth proxy)
-Dockerfile                  FastAPI production container
-data/                       Database documentation
+src/vite.config.ts          Development proxy and build settings (includes auth proxy)
+src/Dockerfile              FastAPI production container
+data/                       Database documentation (full CSVs go in data/raw/, not committed)
 ```
