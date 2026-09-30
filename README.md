@@ -1,35 +1,28 @@
 # FlyWise
 
-Flight delay analytics and prediction platform for INF2006 Group 12.
+**INF2006 Group 12 — Flight Delay Analytics and Prediction Platform**
 
-## Architecture
+## Problem Statement
 
-```text
-React/Vite (:3000)
-       |
-       v
-FastAPI (:8000) -------- Aviationstack
-       |
-       v
-MySQL/MariaDB
-```
+Flight delays can significantly affect passengers and airline operations, while large amounts of flight data can be difficult to interpret. **FlyWise** combines historical flight data, live flight information and machine learning to provide flight search, delay analytics, live flight tracking and delay-risk predictions through a web-based platform.
 
-* **MySQL/MariaDB** — historical flight data, analytics, predictions, users and saved flights
-* **Aviationstack** — live/current flight data
-* **FastAPI** — backend API and authentication
-* **React/Vite** — frontend
+## Team Members
 
-## Prerequisites
+* [Chong Xin Huei - 2502122]
+* [Damien Teh Zhanrong - 2500837]
+* [Daniel Tay Zhu Hao - 2501690]
+* [Wong Jinghong - 2503049]
+* [Wong Zheng Sheng, Jasper - 2500024]
+
+## Quick Start
+
+### Prerequisites
 
 * Python 3.13+
 * Node.js and npm
-* MySQL/MariaDB and MySQL Workbench
-* Database: `group_project`
+* MySQL/MariaDB
 * Aviationstack API key
-
-Database credentials and API keys must not be committed to Git.
-
-## Run Locally
+* Database: `group_project`
 
 ### Backend
 
@@ -53,21 +46,46 @@ python -m uvicorn FastAPI:app --reload --port 8000
 
 ```powershell
 npm install
+$env:VITE_API_URL = "http://localhost:8000"
 npm run dev
 ```
 
-Frontend: `http://localhost:3000`
-API documentation: `http://localhost:8000/docs`
+* Frontend: `http://localhost:3000`
+* API Docs: `http://localhost:8000/docs`
+
+## Architecture
+
+![FlyWise Architecture](docs/architecture.png)
+
+```text
+React/Vite
+    |
+    v
+FastAPI -------- Aviationstack
+    |
+    v
+MySQL/MariaDB
+```
+
+## Technologies
+
+* **Frontend:** React, TypeScript, Vite
+* **Backend:** Python, FastAPI
+* **Database:** MySQL/MariaDB
+* **Machine Learning:** XGBoost, scikit-learn
+* **Data Processing:** pandas, NumPy
+* **Authentication:** JWT, bcrypt
+* **External API:** Aviationstack
+* **Deployment:** AWS S3, CloudFront, App Runner/ECS, RDS
 
 ## Features
 
-* **Overview** — summary metrics, route performance, congestion and prediction
-* **Flight Search** — historical flight search
-* **Live Flights** — manually loaded live/current flights from Aviationstack
-* **Analytics** — monthly, hourly and delay-cause analysis
-* **Prediction** — historical delay-risk prediction
-* **Accounts** — signup, login and JWT authentication
-* **Saved Flights** — save and manage historical/upcoming flights
+* Flight search and historical flight data
+* Live/current flight information
+* Monthly, hourly and delay-cause analytics
+* XGBoost flight delay prediction
+* User signup, login and JWT authentication
+* Saved historical and upcoming flights
 
 ## Main API Routes
 
@@ -75,14 +93,10 @@ API documentation: `http://localhost:8000/docs`
 GET  /summary
 GET  /airports
 GET  /airlines
-GET  /airports/congestion
-POST /predict
-
 GET  /flights
-GET  /flights/{flight_id}
-
 GET  /analytics/...
-GET  /live-flights?airport=JFK&direction=Departure
+GET  /live-flights
+POST /predict
 
 POST /signup
 POST /login
@@ -93,8 +107,6 @@ POST   /upcoming-saved-flights
 DELETE /upcoming-saved-flights/{id}
 ```
 
-Aviationstack is called only when `/live-flights` is requested. The API key remains on the FastAPI backend.
-
 ## Checks
 
 ```powershell
@@ -103,22 +115,27 @@ npm run lint
 python -m py_compile FastAPI.py
 ```
 
+## Known Limitations
+
+* Live flight data depends on Aviationstack availability and API limits.
+* Predictions depend on the coverage and quality of historical training data.
+* Prediction requires the selected airline, airports and route information to be available in the historical database.
+* Historical and live flight data come from different sources and may have different coverage.
+* Local development requires configured database credentials and API keys.
+
 ## AWS Deployment
 
 ```text
-React build  -> S3 + CloudFront
-FastAPI      -> App Runner / ECS
-Database     -> Amazon RDS
+React/Vite → S3 + CloudFront
+                 |
+              FastAPI
+                 |
+             Amazon RDS
+                 |
+           Aviationstack
 ```
 
-Frontend production build:
-
-```powershell
-$env:VITE_API_URL = "https://<your-fastapi-service-url>"
-npm run build
-```
-
-Configure these environment variables on the backend:
+Production backend environment variables:
 
 ```text
 DB_HOST
@@ -129,18 +146,4 @@ DB_NAME
 AVIATIONSTACK_API_KEY
 AVIATIONSTACK_BASE_URL
 FRONTEND_ORIGIN
-```
-
-## Important Files
-
-```text
-FastAPI.py                  FastAPI backend
-requirements.txt            Python dependencies
-SQL Queries/                Backend SQL queries
-src/client/                 React frontend
-src/client/services/api.ts  Frontend API client
-src/client/trip.ts          Flight logic and prediction
-vite.config.ts              Vite configuration
-Dockerfile                  FastAPI container
-data/                       Database documentation
 ```
