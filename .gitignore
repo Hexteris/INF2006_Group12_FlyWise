@@ -11,8 +11,10 @@ build/
 coverage/
 *.lcov
 .nyc_output
+*.pyc
 
 # Environment variables
+.env
 .env.*
 
 # Source data - flight_project_cleaned.csv is ~895 MB. Never commit it.
@@ -25,26 +27,10 @@ flight_project_cleaned.csv
 
 # IDEs and editors
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-._*
-Thumbs.db
-ehthumbs.db
-
-# Database dumps
-*.sql.gz
-*.sql.bz2
 
 # ML model binaries
 *.pkl
 *.joblib
-*.h5
-*.onnx
 
 # Backup files
 *.bak

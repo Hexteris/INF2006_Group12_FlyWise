@@ -1,4 +1,4 @@
--- Save upcoming flights --
+-- Save Upcoming Flight --
 INSERT INTO upcoming_saved_flights (
     user_id,
     flight_number,
@@ -12,7 +12,7 @@ INSERT INTO upcoming_saved_flights (
 )
 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
 
--- Get upcoming saved flights --
+-- Get Upcoming Saved Flights --
 SELECT
     upcoming_saved_flight_id,
     flight_number,
@@ -28,13 +28,13 @@ FROM upcoming_saved_flights
 WHERE user_id = ?
 ORDER BY flight_date ASC, scheduled_departure ASC
 
--- Check upcoming saved flights before deleting --
+-- Check Upcoming Saved Flight --
 SELECT upcoming_saved_flight_id
 FROM upcoming_saved_flights
 WHERE upcoming_saved_flight_id = ?
   AND user_id = ?
 
--- Delete upcoming saved flight --
+-- Delete Upcoming Saved Flight --
 DELETE FROM upcoming_saved_flights
 WHERE upcoming_saved_flight_id = ?
   AND user_id = ?
