@@ -83,11 +83,11 @@ export interface PredictionResult extends Prediction {
 
 /** Request body for POST /api/predict. */
 export interface PredictionRequest {
-  originAirportId: number;
-  destAirportId: number;
-  airlineId: number;
-  /** HHMM, e.g. "0800". */
-  scheduledDepartureTime: string;
+  airlineCode: string;
+  origin: string;
+  destination: string;
+  scheduledDeparture: string;
+  scheduledArrival: string;
   /** YYYY-MM-DD. */
   flightDate: string;
 }

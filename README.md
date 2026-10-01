@@ -57,15 +57,15 @@ npm run dev
 
 ![FlyWise Architecture](docs/architecture.png)
 
-```text
-React/Vite
-    |
-    v
-FastAPI -------- Aviationstack
-    |
-    v
-MySQL/MariaDB
-```
+React/Vite frontend (:3000)
+        |  ↑
+        |  JWT Auth (LocalStorage)
+        v  |
+FastAPI backend (:8000) ---- Aviationstack (live flights only)
+        |  ↑
+        |  User Auth DB (future)
+        v
+MySQL/MariaDB Workbench (historical data and analytics)
 
 ## Technologies
 
@@ -80,9 +80,10 @@ MySQL/MariaDB
 
 ## Features
 
-* Flight search and historical flight data
+* Live flight lookup and delay comparison
 * Live/current flight information
 * Monthly, hourly and delay-cause analytics
+* Historical flight delay data analytics
 * XGBoost flight delay prediction
 * User signup, login and JWT authentication
 * Saved historical and upcoming flights
@@ -118,10 +119,12 @@ python -m py_compile FastAPI.py
 ## Known Limitations
 
 * Live flight data depends on Aviationstack availability and API limits.
-* Predictions depend on the coverage and quality of historical training data.
-* Prediction requires the selected airline, airports and route information to be available in the historical database.
+* Predictions depend on the coverage and quality of the historical training data.
+* Airport coordinates must be available in `data/airports.json` for prediction distance calculations.
+* Predictions for international flights may have reduced applicability because the model was trained using the 2025 US BTS On-Time Performance dataset.
 * Historical and live flight data come from different sources and may have different coverage.
 * Local development requires configured database credentials and API keys.
+
 
 ## AWS Deployment
 
@@ -143,7 +146,8 @@ DB_PORT
 DB_USER
 DB_PASSWORD
 DB_NAME
+JWT_SECRET_KEY
 AVIATIONSTACK_API_KEY
 AVIATIONSTACK_BASE_URL
-FRONTEND_ORIGIN
+VITE_API_URL
 ```

@@ -12,10 +12,10 @@ coverage/
 *.lcov
 .nyc_output
 *.pyc
+__pycache__/
 
 # Environment variables
 .env
-.env.*
 
 # Source data - flight_project_cleaned.csv is ~895 MB. Never commit it.
 # Obtain it separately and place it in the repo root; see data/DATA_DICTIONARY.md.
@@ -29,7 +29,6 @@ flight_project_cleaned.csv
 .vscode/
 
 # ML model binaries
-*.pkl
 *.joblib
 
 # Backup files

@@ -35,8 +35,8 @@ export const pct = (v: number | null | undefined) => (v == null ? '–' : `${Mat
 
 /** Thresholds are on historical delay rate (share of flights >15 min late). Tune to your data. */
 export function risk(score: number) {
-  if (score < 0.2) return { label: 'Low', text: 'text-emerald-600', bar: 'bg-emerald-500' };
-  if (score < 0.35) return { label: 'Moderate', text: 'text-amber-600', bar: 'bg-amber-500' };
+  if (score < 0.2) return { label: 'Low', text: 'text-green-600', bar: 'bg-green-500' };
+  if (score < 0.35) return { label: 'Moderate', text: 'text-yellow-600', bar: 'bg-yellow-500' };
   return { label: 'High', text: 'text-red-600', bar: 'bg-red-500' };
 }
 
@@ -107,19 +107,30 @@ export function applyFilters(list: TripFlight[], f: LiveFilters): TripFlight[] {
 }
 
 export async function predictFlight(
-  f: TripFlight, airports: DimRow[], airlines: DimRow[]
+  f: TripFlight
 ): Promise<PredictionResult> {
-  if (!f.origin || !f.destination) throw new Error('Route unknown for this flight');
-  const o = airports.find((a) => a.code === f.origin);
-  const d = airports.find((a) => a.code === f.destination);
-  const al = airlines.find((a) => a.code === f.airlineCode);
-  const time = hhmm(f.scheduledDeparture);
-  if (!o) throw new Error(`${f.origin} is not in the historical database`);
-  if (!d) throw new Error(`${f.destination} is not in the historical database`);
-  if (!al) throw new Error(`Airline ${f.airlineCode} is not in the historical database`);
-  if (!time) throw new Error('No scheduled departure time');
+  if (!f.origin || !f.destination) {
+    throw new Error('Route unknown for this flight');
+  }
+
+  if (!f.airlineCode) {
+    throw new Error('Airline is unknown for this flight');
+  }
+
+  if (!f.scheduledDeparture) {
+    throw new Error('No scheduled departure time');
+  }
+
+  if (!f.scheduledArrival) {
+    throw new Error('No scheduled arrival time');
+  }
+
   return submitPrediction({
-    originAirportId: o.id, destAirportId: d.id, airlineId: al.id,
-    scheduledDepartureTime: time, flightDate: f.date,
+    airlineCode: f.airlineCode,
+    origin: f.origin,
+    destination: f.destination,
+    scheduledDeparture: f.scheduledDeparture,
+    scheduledArrival: f.scheduledArrival,
+    flightDate: f.date,
   });
 }

@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta, datetime, timezone
+from xgboost import XGBClassifier
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from pathlib import Path
@@ -15,9 +16,12 @@ import re
 import time
 import pandas as pd
 import joblib
+import json
+import math
 
 
-load_dotenv(".env.example") #Read environment variables from .env file
+#Read environment variables from .env file
+load_dotenv(".env") 
 
 # =========================================================
 # FastAPI Application
@@ -46,10 +50,11 @@ app.add_middleware(
 # =========================================================
 
 class PredictionRequest(BaseModel):
-    originAirportId: int
-    destAirportId: int
-    airlineId: int
-    scheduledDepartureTime: str
+    airlineCode: str
+    origin: str
+    destination: str
+    scheduledDeparture: str
+    scheduledArrival: str
     flightDate: str
 
 class SignupRequest(BaseModel):
@@ -93,29 +98,58 @@ query_cache = {}
 
 
 # =========================================================
+# Airport Coordinates
+# =========================================================
+
+AIRPORTS_FILE = BASE_DIR / "data" / "airports.json"
+
+with open(AIRPORTS_FILE, "r", encoding="utf-8") as file:
+    AIRPORTS = json.load(file)
+
+print(f"Loaded {len(AIRPORTS)} airport coordinates.")
+
+
+# =========================================================
 # Machine Learning Model
 # =========================================================
 
 MODEL_DIR = BASE_DIR / "ML Model"
 
 try:
-    xgb_model = joblib.load(
-        MODEL_DIR / "xgb_model.pkl"
-    )
+    print("Loading feature_columns.json...")
+    with open(MODEL_DIR / "feature_columns.json", "r") as f:
+        feature_columns = json.load(f)
+    print("feature_columns.json loaded successfully.")
 
+    print("Loading preprocessor.pkl...")
     preprocessor = joblib.load(
         MODEL_DIR / "preprocessor.pkl"
     )
+    print("preprocessor.pkl loaded successfully.")
 
-    feature_columns = joblib.load(
-        MODEL_DIR / "feature_columns.pkl"
+    print("Loading xgb_best_params.json...")
+    with open(MODEL_DIR / "xgb_best_params.json", "r") as f:
+        xgb_best_params = json.load(f)
+    print("xgb_best_params.json loaded successfully.")
+
+    print("Loading xgb_metrics.json...")
+    with open(MODEL_DIR / "xgb_metrics.json", "r") as f:
+        xgb_metrics = json.load(f)
+    print("xgb_metrics.json loaded successfully.")
+
+    print("Loading xgb_model.json...")
+    xgb_model = XGBClassifier()
+    xgb_model.load_model(
+        MODEL_DIR / "xgb_model.json"
     )
+    print("xgb_model.json loaded successfully.")
 
     print("FlyWise ML model loaded successfully.")
     print("Required features:", feature_columns)
 
 except Exception as error:
     print("Failed to load FlyWise ML model:")
+    print(type(error).__name__)
     print(error)
 
     xgb_model = None
@@ -1284,152 +1318,74 @@ def api_congestion(
 # Prediction Data
 # =========================================================
 
-async def get_future_flight_from_aviationstack(
-    airline_code: str,
+def calculate_distance_km(
     origin_code: str,
-    destination_code: str,
-    flight_date: str,
-    departure_time: str
-):
-    """
-    Find the scheduled future flight that best matches
-    the user's prediction request.
-    """
+    destination_code: str
+) -> float:
 
-    api_key = os.getenv("AVIATIONSTACK_API_KEY")
+    origin_code = origin_code.upper()
+    destination_code = destination_code.upper()
 
-    if not api_key:
+    if origin_code not in AIRPORTS:
         raise HTTPException(
-            status_code=503,
-            detail="AVIATIONSTACK_API_KEY is not configured"
-        )
-
-    base_url = os.getenv(
-        "AVIATIONSTACK_BASE_URL",
-        "http://api.aviationstack.com/v1"
-    ).rstrip("/")
-
-    params = {
-        "access_key": api_key,
-        "dep_iata": origin_code,
-        "arr_iata": destination_code,
-        "airline_iata": airline_code,
-        "flight_status": "scheduled",
-        "limit": 100
-    }
-
-    try:
-        async with httpx.AsyncClient(timeout=15) as client:
-
-            response = await client.get(
-                f"{base_url}/flights",
-                params=params,
-                headers={"Accept": "application/json"}
-            )
-
-    except httpx.RequestError as error:
-
-        raise HTTPException(
-            status_code=502,
-            detail=f"Aviationstack request failed: {error}"
-        )
-
-    if not response.is_success:
-
-        raise HTTPException(
-            status_code=502,
+            status_code=422,
             detail=(
-                "Aviationstack returned "
-                f"HTTP {response.status_code}"
+                f"Airport {origin_code} does not have "
+                "coordinates available."
             )
         )
 
-    payload = response.json()
-
-    if payload.get("error"):
-
-        message = payload["error"].get(
-            "message",
-            "Aviationstack request failed"
-        )
-
+    if destination_code not in AIRPORTS:
         raise HTTPException(
-            status_code=502,
-            detail=message
-        )
-
-    flights = payload.get("data", [])
-
-    target_date = datetime.strptime(
-        flight_date,
-        "%Y-%m-%d"
-    ).date()
-
-    target_hour = int(departure_time[:2])
-    target_minute = int(departure_time[2:4])
-
-    best_match = None
-    best_difference = None
-
-    for flight in flights:
-
-        departure = flight.get("departure") or {}
-        arrival = flight.get("arrival") or {}
-
-        scheduled_departure = departure.get("scheduled")
-        scheduled_arrival = arrival.get("scheduled")
-
-        if not scheduled_departure:
-            continue
-
-        try:
-            departure_dt = datetime.fromisoformat(
-                scheduled_departure.replace("Z", "+00:00")
-            )
-        except ValueError:
-            continue
-
-        # Must be the requested date
-        if departure_dt.date() != target_date:
-            continue
-
-        difference = abs(
-            departure_dt.hour * 60
-            + departure_dt.minute
-            - (
-                target_hour * 60
-                + target_minute
-            )
-        )
-
-        if (
-            best_difference is None
-            or difference < best_difference
-        ):
-            best_match = flight
-            best_difference = difference
-
-    if best_match is None:
-
-        raise HTTPException(
-            status_code=404,
+            status_code=422,
             detail=(
-                "No matching scheduled future flight "
-                "was found from Aviationstack."
+                f"Airport {destination_code} does not have "
+                "coordinates available."
             )
         )
 
-    return best_match
+    # airports.json stores [longitude, latitude]
+    origin_lon, origin_lat = AIRPORTS[origin_code]
+    destination_lon, destination_lat = AIRPORTS[destination_code]
 
+    earth_radius_km = 6371.0
 
+    lat1 = math.radians(origin_lat)
+    lat2 = math.radians(destination_lat)
 
+    dlat = math.radians(
+        destination_lat - origin_lat
+    )
 
-# =====================================================
-# 1. Check ML model
-# =====================================================
+    dlon = math.radians(
+        destination_lon - origin_lon
+    )
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(dlon / 2) ** 2
+    )
+
+    c = 2 * math.atan2(
+        math.sqrt(a),
+        math.sqrt(1 - a)
+    )
+
+    return earth_radius_km * c
+
+# =========================================================
+# Prediction
+# =========================================================
 
 @app.post("/predict")
 async def api_predict(request: PredictionRequest):
+
+    # =====================================================
+    # 1. Check ML model
+    # =====================================================
+
     if (
         xgb_model is None
         or preprocessor is None
@@ -1440,18 +1396,51 @@ async def api_predict(request: PredictionRequest):
             detail="FlyWise ML model is not available"
         )
 
+    # =====================================================
+    # 2. Validate request
+    # =====================================================
+
+    airline_code = request.airlineCode.strip().upper()
+    origin_code = request.origin.strip().upper()
+    destination_code = request.destination.strip().upper()
+
+    if not airline_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Airline code is required"
+        )
+
+    if not origin_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Origin airport is required"
+        )
+
+    if not destination_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Destination airport is required"
+        )
+
     try:
+
         flight_date = datetime.strptime(
             request.flightDate,
             "%Y-%m-%d"
         )
 
-        dep_hour = int(
-            request.scheduledDepartureTime[:2]
+        scheduled_departure = datetime.fromisoformat(
+            request.scheduledDeparture.replace(
+                "Z",
+                "+00:00"
+            )
         )
 
-        dep_minute = int(
-            request.scheduledDepartureTime[2:4]
+        scheduled_arrival = datetime.fromisoformat(
+            request.scheduledArrival.replace(
+                "Z",
+                "+00:00"
+            )
         )
 
     except (ValueError, TypeError):
@@ -1459,194 +1448,88 @@ async def api_predict(request: PredictionRequest):
         raise HTTPException(
             status_code=422,
             detail=(
-                "Invalid flight date or departure time. "
-                "Expected YYYY-MM-DD and HHMM."
+                "Invalid flight date or schedule. "
+                "Expected YYYY-MM-DD and ISO datetime values."
             )
         )
 
-
-# =====================================================
-# 3. Convert database IDs → airport/airline codes
-# =====================================================
-
-    lookup_query = """
-        SELECT
-            a.airline_code AS airline_code,
-            ao.airport_code AS origin_code,
-            ad.airport_code AS destination_code
-
-        FROM airlines a
-
-        JOIN airports ao
-            ON ao.airport_id = ?
-
-        JOIN airports ad
-            ON ad.airport_id = ?
-
-        WHERE a.airline_id = ?
-    """
-
-    lookup = execute_query(
-        lookup_query,
-        (
-            request.originAirportId,
-            request.destAirportId,
-            request.airlineId
-        )
-    )
-
-    if not lookup:
-
-        raise HTTPException(
-            status_code=404,
-            detail="Airline or airport not found"
-        )
-
-    airline_code = lookup[0]["airline_code"]
-    origin_code = lookup[0]["origin_code"]
-    destination_code = lookup[0][
-        "destination_code"
-    ]
-
-
-# =====================================================
-# 4. Get FUTURE scheduled flight from Aviationstack
-# =====================================================
-
-    future_flight = await get_future_flight_from_aviationstack(
-        airline_code=airline_code,
-        origin_code=origin_code,
-        destination_code=destination_code,
-        flight_date=request.flightDate,
-        departure_time=request.scheduledDepartureTime
-    )
-
-    departure = future_flight.get("departure") or {}
-    arrival = future_flight.get("arrival") or {}
-
-
     # =====================================================
-    # 5. Read scheduled departure / arrival
+    # 3. Calculate scheduled flight duration
     # =====================================================
 
-    scheduled_departure = departure.get("scheduled")
-    scheduled_arrival = arrival.get("scheduled")
+    elapsed_seconds = (
+        scheduled_arrival - scheduled_departure
+    ).total_seconds()
 
-    if not scheduled_departure or not scheduled_arrival:
+    crs_elapsed_time = elapsed_seconds / 60
 
+    if crs_elapsed_time <= 0:
         raise HTTPException(
             status_code=422,
             detail=(
-                "Future flight does not contain enough "
-                "schedule information for prediction."
+                "Scheduled arrival must be after "
+                "scheduled departure."
             )
         )
-
-    try:
-        departure_dt = datetime.fromisoformat(
-            scheduled_departure.replace(
-                "Z",
-                "+00:00"
-            )
-        )
-
-        arrival_dt = datetime.fromisoformat(
-            scheduled_arrival.replace(
-                "Z",
-                "+00:00"
-            )
-        )
-
-    except ValueError:
-
-        raise HTTPException(
-            status_code=422,
-            detail="Unable to parse flight schedule"
-        )
-
+    
 
     # =====================================================
-    # 6. Scheduled elapsed time
+    # 4. Calculate route distance
     # =====================================================
 
-    elapsed = (
-        arrival_dt.astimezone()
-        - departure_dt.astimezone()
-    ).total_seconds() / 60
-
-    crs_elapsed_time = abs(float(elapsed))
-
-
-    # =====================================================
-    # 7. Get route distance
-    # =====================================================
-
-    distance_query = """
-        SELECT AVG(f.distance) AS distance
-
-        FROM flights f
-
-        JOIN routes r
-            ON r.route_id = f.route_id
-
-        WHERE r.origin_airport_id = ?
-            AND r.destination_airport_id = ?
-            AND f.distance IS NOT NULL
-    """
-
-    distance_result = execute_query(
-        distance_query,
-        (
-            request.originAirportId,
-            request.destAirportId
-        )
+    distance_km = calculate_distance_km(
+        origin_code,
+        destination_code
     )
 
-    distance = None
+    # BTS distance is in miles.
+    # Convert km → miles because the ML model
+    # was trained using the BTS distance feature.
 
-    if distance_result:
-        distance = distance_result[0]["distance"]
-
-    if distance is None:
-
-        raise HTTPException(
-            status_code=422,
-            detail=(
-                "No route distance is available "
-                "for this flight."
-            )
-        )
-
+    distance = distance_km * 0.621371
 
     # =====================================================
-    # 8. Construct EXACT ML features
+    # 6. Construct ML features
     # =====================================================
 
     ml_input = {
-        "reporting_airline": airline_code,
-        "origin": origin_code,
-        "dest": destination_code,
 
-        "crs_elapsed_time": crs_elapsed_time,
-        "distance": float(distance),
+        "reporting_airline":
+            airline_code,
 
-        "month": flight_date.month,
+        "origin":
+            origin_code,
 
-        # Python:
-        # Monday = 0
-        # Sunday = 6
-        "day_of_week": flight_date.weekday(),
+        "dest":
+            destination_code,
 
-        "dep_hour": departure_dt.hour,
-        "dep_minute": departure_dt.minute,
+        "crs_elapsed_time":
+            float(crs_elapsed_time),
 
-        "arr_hour": arrival_dt.hour,
-        "arr_minute": arrival_dt.minute
+        "distance":
+            float(distance),
+
+        "month":
+            flight_date.month,
+
+        "day_of_week":
+            flight_date.weekday(),
+
+        "dep_hour":
+            scheduled_departure.hour,
+
+        "dep_minute":
+            scheduled_departure.minute,
+
+        "arr_hour":
+            scheduled_arrival.hour,
+
+        "arr_minute":
+            scheduled_arrival.minute
     }
 
-
     # =====================================================
-    # 9. Convert into DataFrame
+    # 7. Convert to DataFrame
     # =====================================================
 
     input_df = pd.DataFrame(
@@ -1654,6 +1537,7 @@ async def api_predict(request: PredictionRequest):
     )
 
     try:
+
         input_df = input_df[
             feature_columns
         ]
@@ -1668,9 +1552,8 @@ async def api_predict(request: PredictionRequest):
             )
         )
 
-
     # =====================================================
-    # 10. Apply SAME preprocessing used during training
+    # 8. Apply training preprocessing
     # =====================================================
 
     try:
@@ -1691,9 +1574,8 @@ async def api_predict(request: PredictionRequest):
             )
         )
 
-
     # =====================================================
-    # 11. XGBoost prediction
+    # 9. XGBoost prediction
     # =====================================================
 
     try:
@@ -1716,92 +1598,147 @@ async def api_predict(request: PredictionRequest):
 
 
     # =====================================================
-    # 12. Keep historical information for existing UI
+    # 10. Get historical delay rates
     # =====================================================
 
-    route_rate_query = """
-    SELECT AVG(f.departure_del15) AS delayRate
+    # Get airline ID
+    airlines_query = get_query(
+        "Dropdown.sql",
+        "Airlines"
+    )
 
-    FROM flights f
+    airlines = execute_query(
+        airlines_query
+    )
 
-    JOIN routes r
-        ON r.route_id = f.route_id
+    airline_row = next(
+        (
+            row for row in airlines
+            if row["airline_code"] == airline_code
+        ),
+        None
+    )
 
-    WHERE r.origin_airport_id = ?
-        AND r.destination_airport_id = ?
-        AND f.airline_id = ?
-    """
+    if not airline_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airline {airline_code} not found"
+        )
 
-    hourly_rate_query = """
-    SELECT AVG(f.departure_del15) AS delayRate
+    airline_id = airline_row["airline_id"]
 
-    FROM flights f
 
-    JOIN routes r
-        ON r.route_id = f.route_id
+    # Get airport IDs
+    airports_query = get_query(
+        "Dropdown.sql",
+        "Airports"
+    )
 
-    WHERE r.origin_airport_id = ?
-        AND HOUR(f.scheduled_departure) = ?
-    """
+    airports = execute_query(
+        airports_query
+    )
+
+    origin_row = next(
+        (
+            row for row in airports
+            if row["airport_code"] == origin_code
+        ),
+        None
+    )
+
+    destination_row = next(
+        (
+            row for row in airports
+            if row["airport_code"] == destination_code
+        ),
+        None
+    )
+
+    if not origin_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airport {origin_code} not found"
+        )
+
+    if not destination_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airport {destination_code} not found"
+        )
+
+    origin_id = origin_row["airport_id"]
+    destination_id = destination_row["airport_id"]
+
+
+    # Route + airline historical delay rate
+    route_query = get_query(
+        "Prediction Data.sql",
+        "Route delay rate"
+    )
 
     route_result = execute_query(
-    route_rate_query,
-    (
-        request.originAirportId,
-        request.destAirportId,
-        request.airlineId
-    )
-    )
-
-    hourly_result = execute_query(
-        hourly_rate_query,
+        route_query,
         (
-            request.originAirportId,
-            dep_hour
+            origin_id,
+            destination_id,
+            airline_id
         )
     )
 
-    route_rate = (
-        route_result[0]["delayRate"]
+    route_delay_rate = (
+        float(route_result[0]["delayRate"])
         if route_result
+        and route_result[0]["delayRate"] is not None
         else None
     )
 
-    hourly_rate = (
-        hourly_result[0]["delayRate"]
+
+    # Departure-hour historical delay rate
+    hourly_query = get_query(
+        "Prediction Data.sql",
+        "Hourly delay rate"
+    )
+
+    hourly_result = execute_query(
+        hourly_query,
+        (
+            origin_id,
+            scheduled_departure.hour
+        )
+    )
+
+    hourly_delay_rate = (
+        float(hourly_result[0]["delayRate"])
         if hourly_result
+        and hourly_result[0]["delayRate"] is not None
         else None
     )
-
-    historical = {
-        "routeDelayRate":
-            float(route_rate)
-            if route_rate is not None
-            else None,
-
-        "hourlyDelayRate":
-            float(hourly_rate)
-            if hourly_rate is not None
-            else None
-    }
-
 
     # =====================================================
-    # 13. Return result to existing React website
+    # 10. Return result
     # =====================================================
 
     return api_success({
 
-        "score": delay_probability,
+        "score":
+            delay_probability,
 
         "label":
-            "DELAYED"
-            if delay_probability >= 0.5
-            else "ON_TIME",
+            (
+                "DELAYED"
+                if delay_probability >= 0.5
+                else "ON_TIME"
+            ),
 
-        "modelVersion": "xgboost-v1",
+        "modelVersion":
+            "xgboost-v1",
 
-        "historical": historical
+        # Kept for compatibility with the existing
+        # React PredictionResult interface.
+        "historical": {
+            "routeDelayRate": route_delay_rate,
+            "hourlyDelayRate": hourly_delay_rate,
+        }
     })
 
 # @app.get("/prediction-data")

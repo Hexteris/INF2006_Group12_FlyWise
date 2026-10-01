@@ -61,7 +61,7 @@ export default function FlightCompare({ flights, dims }: Props) {
 
       asked.current.add(f.key);
 
-      predictFlight(f, dims.airports, dims.airlines)
+      predictFlight(f)
         .then((r) =>
           setResults((s) => ({
             ...s,
