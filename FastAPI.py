@@ -1,5 +1,7 @@
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta, datetime, timezone
 from xgboost import XGBClassifier
@@ -32,6 +34,8 @@ app = FastAPI(
     description="FastAPI backend for the flight analytics database",
     version="1.0.0"
 )
+
+app.mount("/assets", StaticFiles(directory="dist/client/assets"), name="assets")
 
 app.add_middleware(
     CORSMiddleware,
@@ -167,7 +171,8 @@ def get_connection():
         port=int(os.getenv("DB_PORT", "3306")),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        ssl=True
     )
 
 
@@ -607,9 +612,7 @@ def delete_account(
 
 @app.get("/")
 def root():
-    return {
-        "message": "Flight Analytics API is running"
-    }
+    return FileResponse("dist/client/index.html")
 
 # =========================================================
 # Dropdown Endpoints

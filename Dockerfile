@@ -16,6 +16,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY FastAPI.py .
 COPY ["SQL Queries/", "./SQL Queries/"]
 COPY ["ML Model/", "./ML Model/"]
+COPY data/ ./data/
+COPY dist/client/ ./dist/client/
 
 EXPOSE 8000
 

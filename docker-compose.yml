@@ -1,48 +1,16 @@
 services:
-  mysql:
-    image: mysql:8.0
-    container_name: flywise-mysql
-    environment:
-      MYSQL_ROOT_PASSWORD: root123
-      MYSQL_DATABASE: flywise
-      MYSQL_USER: flywise
-      MYSQL_PASSWORD: flywise123
-    ports:
-      - "3307:3306"
-    volumes:
-      - mysql_data:/var/lib/mysql
-    command: --default-authentication-plugin=caching_sha2_password --skip-name-resolve
-    healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
-      timeout: 20s
-      retries: 10
-    networks:
-      - flywise
-
   app:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: flywise-app
+    env_file:
+      - .env
     environment:
-      DB_HOST: mysql
+      DB_HOST: inf2006-db.cnepcitijuis.us-east-1.rds.amazonaws.com
       DB_PORT: 3306
-      DB_USER: flywise
-      DB_PASSWORD: flywise123
-      DB_NAME: flywise
-      DB_SSL: "false"
+      DB_NAME: group_project
+      DB_SSL: "true"
     ports:
       - "8000:8000"
-    depends_on:
-      mysql:
-        condition: service_healthy
     restart: unless-stopped
-    networks:
-      - flywise
-
-volumes:
-  mysql_data:
-
-networks:
-  flywise:
-    driver: bridge
