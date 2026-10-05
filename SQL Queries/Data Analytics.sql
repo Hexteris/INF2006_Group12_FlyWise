@@ -216,21 +216,13 @@ SELECT
     
 
 -- Delay trend by month --
-SELECT 
-    DATE_FORMAT(f.flight_date, '%b') AS month,
-    COUNT(*) AS total_flights,
-    ROUND(100.0 * SUM(CASE
-                WHEN f.arrival_delay > 15 THEN 1
-                ELSE 0
-            END) / COUNT(*),
-            2) AS delay_rate,
-    ROUND(AVG(f.arrival_delay), 2) AS avg_delay
-FROM
-    flights f
-WHERE
-    f.cancelled = 0 AND f.diverted = 0
-GROUP BY MONTH(f.flight_date) , DATE_FORMAT(f.flight_date, '%b')
-ORDER BY MONTH(f.flight_date);
+SELECT
+    month_name AS month,
+    total_flights,
+    delay_rate,
+    avg_delay
+FROM monthly_delay_summary
+ORDER BY month_num;
 
 
 -- Delay trend by hour --
