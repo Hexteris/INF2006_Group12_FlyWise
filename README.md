@@ -1,171 +1,133 @@
 # FlyWise
 
-Flight delay analytics and prediction platform for INF2006 Group 12.
+**INF2006 Group 12 — Flight Delay Analytics and Prediction Platform**
 
-## Architecture
+## Problem Statement
 
-```text
-React/Vite frontend (:3000)
-        |  ↑
-        |  JWT Auth (LocalStorage)
-        v  |
-FastAPI backend (:8000) ---- Aviationstack (live flights only)
-        |  ↑
-        |  User Auth DB (future)
-        v
-MySQL/MariaDB Workbench (historical data and analytics)
-```
+Flight delays can significantly affect passengers and airline operations, while large amounts of flight data can be difficult to interpret. **FlyWise** combines historical flight data, live flight information and machine learning to provide flight search, delay analytics, live flight tracking and delay-risk predictions through a web-based platform.
 
-**Authentication Flow:**
-1. Frontend handles JWT token management in localStorage
-2. Tokens automatically validated on app load
-3. Auth state controls UI/feature access (partial gate)
-4. Backend auth endpoints ready for implementation
-5. Future: User database for persistent account storage
+## Team Members
 
-Historical searches, analytics, and predictions use the database. Aviationstack is
-called only by `GET /live-flights` when a user manually loads the Live Flights page.
+* Chong Xin Huei - 2502122
+* Damien Teh Zhanrong - 2500837
+* Daniel Tay Zhu Hao - 2501690
+* Wong Jinghong - 2503049
+* Wong Zheng Sheng, Jasper - 2500024
 
-## Prerequisites
+## Quick Start
+
+### Prerequisites
 
 * Python 3.13+
 * Node.js and npm
-* MySQL/MariaDB and MySQL Workbench
+* MySQL/MariaDB (with MySQL Workbench)
 * Database: `group_project`
 * Aviationstack API key
 
 Database credentials and API keys must not be committed to Git.
 
-## Run Locally
+### Setup
 
-All application code lives in `src/`. Run every command below from inside `src/`
-so the `.env` files resolve.
+All application code lives in `src/`. Run every command below from inside `src/` so the `.env` file resolves.
 
 ```powershell
 cd src
 Copy-Item .env.example .env        # then fill in real values
+```
 
-# Frontend (dev)
-npm install
-npm run dev                        # http://localhost:3000, proxies API to :8000
+### Backend
 
-# Backend (run from inside src/ so .env files resolve)
+```powershell
 python -m venv ../.venv
-../.venv/Scripts/Activate.ps1      # Windows; use `source ../.venv/bin/activate` on Linux
+../.venv/Scripts/Activate.ps1      # Linux/macOS: source ../.venv/bin/activate
 pip install -r requirements.txt
-uvicorn FastAPI:app --host 0.0.0.0 --port 8000
+python -m uvicorn FastAPI:app --reload --port 8000
+```
 
-# Docker (build context is src/)
+### Frontend
+
+```powershell
+npm install
+npm run dev                        # proxies API calls to :8000
+```
+
+### Docker (optional)
+
+```powershell
 docker build -t flywise .
 docker run --env-file .env -p 8000:8000 flywise
 ```
 
+* Frontend: <http://localhost:3000>
+* API Docs: <http://localhost:8000/docs>
+
 The full source CSVs are not committed. Place them in `data/raw/`.
 
-Open <http://localhost:3000>. FastAPI documentation is available at
-<http://localhost:8000/docs>.
+## Architecture
 
-## User Authentication Flow
+![FlyWise Architecture](docs/architecture.png)
 
-The FlyWise platform implements a **partial-gate authentication system** where most features are publicly accessible, but prediction capabilities require user accounts.
+```text
+React/Vite frontend (:3000)
+        |  ↑
+        |  JWT Auth (localStorage)
+        v  |
+FastAPI backend (:8000) ---- Aviationstack (live flights only)
+        |
+        v
+MySQL/MariaDB (historical data, analytics, users, saved flights)
+```
 
-### **Authentication Features**
+Historical searches, analytics and predictions use the database. Aviationstack is called only by `GET /live-flights` when a user manually loads the Live Flights page. The API key stays in FastAPI and is never sent to the frontend.
 
-**When Not Logged In:**
-- **Public Access**: All dashboard pages, analytics, flight search, and live flights
-- **Prediction Guard**: Flight delay predictions require sign-in
-- **Auth Access Points**:
-  - "Sign in" link in the top-right header
-  - Auth prompt on the prediction form
-  - Mobile menu auth section
+## Technologies
 
-**When Logged In:**
-- **Full Prediction Access**: Submit unlimited flight delay predictions
-- **Account Management**: Update profile, manage account settings
-- **Enhanced Features**: Personalized experience with user-specific features
+* **Frontend:** React, TypeScript, Vite
+* **Backend:** Python, FastAPI
+* **Database:** MySQL/MariaDB
+* **Machine Learning:** XGBoost, scikit-learn
+* **Data Processing:** pandas, NumPy
+* **Authentication:** JWT, bcrypt
+* **External API:** Aviationstack
+* **Deployment:** Docker, AWS S3, CloudFront, App Runner/ECS, RDS
 
-### **User Account Management**
+## Features
 
-**Creating an Account:**
-1. Click "Sign in" in the header
-2. Switch to "Create account" mode
-3. Enter email, password, and optional name
-4. Account created instantly with JWT token storage
+* Historical flight search and delay comparison
+* Live/current flight information
+* Monthly, hourly and delay-cause analytics
+* XGBoost flight delay prediction (sign-in required)
+* User signup, login and JWT authentication
+* Saved historical and upcoming flights
 
-**Managing Your Account:**
-- **Profile Updates**: Change name and email
-- **Account Settings**: Access via header dropdown → "Account Settings"
-- **Security**: Passwords handled securely (future backend implementation)
-- **Account Deletion**: Full CRUD support with confirmation safeguards
+### Frontend Pages
 
-**Signing Out:**
-- Header dropdown → "Log out"
-- Confirmation modal shows user info
-- Requires explicit confirmation
-- Token cleared from localStorage
-
-### **Prediction Workflow**
-
-**For New Users:**
-1. Navigate to Overview page
-2. Fill out prediction form (airline, airports, time, date)
-3. Click "Get delay prediction"
-4. See auth prompt with sign-in/create account options
-5. Complete authentication
-6. Prediction submitted automatically after login
-
-**For Returning Users:**
-1. Sign in via header (token persists between sessions)
-2. Fill prediction form
-3. Submit directly without interruption
-4. View prediction results with confidence scores
-
-### **Security & Privacy**
-
-- **JWT Tokens**: Secure bearer token authentication
-- **Local Storage**: Tokens persisted for session continuity
-- **Validation**: Automatic token validation on app load
-- **Partial Data**: Only essential user data stored client-side
-- **Confirmation Dialogs**: Critical actions require explicit confirmation
-
-## Frontend Pages
-
-- **Overview**: summary metrics, route performance, congestion, and prediction.
-- **Flight Search**: historical flights from the Workbench database.
-- **Live Flights**: manually refreshed Aviationstack scheduled flights.
-- **Analytics**: monthly, hourly, and delay-cause analysis from the database.
+* **Overview:** summary metrics, route performance, congestion and prediction
+* **Flight Search:** historical flights from the database
+* **Live Flights:** manually refreshed Aviationstack scheduled flights
+* **Analytics:** monthly, hourly and delay-cause analysis
 
 ## Main API Routes
 
-### Core Application Routes
 ```text
 GET  /summary
 GET  /airports
 GET  /airlines
 GET  /airports/congestion
-POST /predict
-
 GET  /flights
 GET  /flights/{flight_id}
-
 GET  /analytics/...
 GET  /live-flights?airport=JFK&direction=Departure
+POST /predict
+
+POST /signup
+POST /login
+GET  /me
+
+GET    /upcoming-saved-flights
+POST   /upcoming-saved-flights
+DELETE /upcoming-saved-flights/{id}
 ```
-
-### Authentication Routes (Frontend Ready - Backend Implementation Required)
-```text
-POST /auth/login           # User login with email/password
-POST /auth/signup          # Create new user account
-GET  /auth/me              # Get current user profile (requires auth)
-PUT  /auth/profile         # Update user profile (requires auth)
-DELETE /auth/account       # Delete user account (requires auth)
-```
-
-**Note**: Authentication routes are proxied through Vite during development and ready for backend implementation.
-
-The frontend uses Vite's development proxy. The Aviationstack key stays in FastAPI and
-is never sent to React. The free Aviationstack plan has a 100-request monthly limit, so
-Live Flights uses manual refresh rather than automatic polling.
 
 ## Checks
 
@@ -176,12 +138,22 @@ npm run lint
 python -m py_compile FastAPI.py
 ```
 
+## Known Limitations
+
+* Live flight data depends on Aviationstack availability. The free plan allows 100 requests per month, so Live Flights uses manual refresh instead of polling.
+* Predictions depend on the coverage and quality of the historical training data.
+* Predictions for international flights may be less reliable because the model was trained on the 2025 US BTS On-Time Performance dataset.
+* Airport coordinates must be available in `data/airports.json` for prediction distance calculations.
+* Historical and live flight data come from different sources and may have different coverage.
+* Local development requires configured database credentials and API keys.
+
 ## AWS Deployment
 
 ```text
 React build  -> S3 + CloudFront
 FastAPI      -> App Runner / ECS
 Database     -> Amazon RDS
+Live data    -> Aviationstack (called from FastAPI)
 ```
 
 Frontend production build:
@@ -191,7 +163,7 @@ $env:VITE_API_URL = "https://<your-fastapi-service-url>"
 npm run build
 ```
 
-Configure these environment variables on the backend:
+Backend environment variables:
 
 ```text
 DB_HOST
@@ -199,6 +171,7 @@ DB_PORT
 DB_USER
 DB_PASSWORD
 DB_NAME
+JWT_SECRET_KEY
 AVIATIONSTACK_API_KEY
 AVIATIONSTACK_BASE_URL
 FRONTEND_ORIGIN
@@ -207,17 +180,17 @@ FRONTEND_ORIGIN
 ## Important Files
 
 ```text
-src/FastAPI.py              FastAPI backend
-src/requirements.txt        Python dependencies
-src/.env.example            Environment variable template (placeholders only)
-src/SQL Queries/            SQL used by the backend
-src/client/                 React pages and components
-src/client/services/api.ts  Frontend API client (includes auth API)
-src/client/context/AuthContext.tsx  Authentication state management
-src/client/components/AuthModal.tsx         Login/signup modal
-src/client/components/AccountSettingsModal.tsx  User account management
-src/types.ts                TypeScript interfaces (includes auth types)
-src/vite.config.ts          Development proxy and build settings (includes auth proxy)
-src/Dockerfile              FastAPI production container
-data/                       Database documentation (full CSVs go in data/raw/, not committed)
+src/FastAPI.py                       FastAPI backend
+src/requirements.txt                 Python dependencies
+src/.env.example                     Environment variable template (placeholders only)
+src/SQL Queries/                     SQL used by the backend
+src/client/                          React pages and components
+src/client/services/api.ts           Frontend API client
+src/client/context/AuthContext.tsx   Authentication state
+src/types.ts                         TypeScript interfaces
+src/vite.config.ts                   Dev proxy and build settings
+src/Dockerfile                       FastAPI production container
+ML Model/                            Trained XGBoost model and preprocessor
+database/                            SQL summary tables
+data/                                Airport data (full CSVs go in data/raw/)
 ```

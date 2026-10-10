@@ -11,6 +11,8 @@ build/
 coverage/
 *.lcov
 .nyc_output
+*.pyc
+__pycache__/
 
 # Environment variables
 __pycache__/
@@ -20,39 +22,18 @@ __pycache__/
 !.env.example
 
 # Full source data lives in data/raw/ (flight_project_cleaned.csv is ~895 MB). Never commit it; see data/DATA_DICTIONARY.md.
-flight_project_cleaned.csv
-*.csv
-data/raw/
-!data/*.csv
 
 # Agent/debug scratch output
 .logs/
 
 # IDEs and editors
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# OS generated files
-.DS_Store
-._*
-Thumbs.db
-ehthumbs.db
-
-# Database dumps
-*.sql.gz
-*.sql.bz2
 
 # ML model binaries
-*.pkl
 *.joblib
-*.h5
-*.onnx
 
 # Backup files
 *.bak
 *.backup
-.env
-.env
+
+

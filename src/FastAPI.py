@@ -1,7 +1,10 @@
 from fastapi import FastAPI, HTTPException, Query, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from datetime import timedelta, datetime, timezone
+from xgboost import XGBClassifier
 from dotenv import load_dotenv
 from pydantic import BaseModel
 from pathlib import Path
@@ -13,9 +16,14 @@ import httpx
 import os
 import re
 import time
+import pandas as pd
+import joblib
+import json
+import math
 
 
-load_dotenv(".env.example") #Read environment variables from .env file
+#Read environment variables from .env file
+load_dotenv(".env") 
 
 # =========================================================
 # FastAPI Application
@@ -26,6 +34,8 @@ app = FastAPI(
     description="FastAPI backend for the flight analytics database",
     version="1.0.0"
 )
+
+app.mount("/assets", StaticFiles(directory="dist/client/assets"), name="assets")
 
 app.add_middleware(
     CORSMiddleware,
@@ -44,10 +54,11 @@ app.add_middleware(
 # =========================================================
 
 class PredictionRequest(BaseModel):
-    originAirportId: int
-    destAirportId: int
-    airlineId: int
-    scheduledDepartureTime: str
+    airlineCode: str
+    origin: str
+    destination: str
+    scheduledDeparture: str
+    scheduledArrival: str
     flightDate: str
 
 class SignupRequest(BaseModel):
@@ -91,6 +102,66 @@ query_cache = {}
 
 
 # =========================================================
+# Airport Coordinates
+# =========================================================
+
+AIRPORTS_FILE = BASE_DIR / "data" / "airports.json"
+
+with open(AIRPORTS_FILE, "r", encoding="utf-8") as file:
+    AIRPORTS = json.load(file)
+
+print(f"Loaded {len(AIRPORTS)} airport coordinates.")
+
+
+# =========================================================
+# Machine Learning Model
+# =========================================================
+
+MODEL_DIR = BASE_DIR / "ML Model"
+
+try:
+    print("Loading feature_columns.json...")
+    with open(MODEL_DIR / "feature_columns.json", "r") as f:
+        feature_columns = json.load(f)
+    print("feature_columns.json loaded successfully.")
+
+    print("Loading preprocessor.pkl...")
+    preprocessor = joblib.load(
+        MODEL_DIR / "preprocessor.pkl"
+    )
+    print("preprocessor.pkl loaded successfully.")
+
+    print("Loading xgb_best_params.json...")
+    with open(MODEL_DIR / "xgb_best_params.json", "r") as f:
+        xgb_best_params = json.load(f)
+    print("xgb_best_params.json loaded successfully.")
+
+    print("Loading xgb_metrics.json...")
+    with open(MODEL_DIR / "xgb_metrics.json", "r") as f:
+        xgb_metrics = json.load(f)
+    print("xgb_metrics.json loaded successfully.")
+
+    print("Loading xgb_model.json...")
+    xgb_model = XGBClassifier()
+    xgb_model.load_model(
+        MODEL_DIR / "xgb_model.json"
+    )
+    print("xgb_model.json loaded successfully.")
+
+    print("FlyWise ML model loaded successfully.")
+    print("Required features:", feature_columns)
+
+except Exception as error:
+    print("Failed to load FlyWise ML model:")
+    print(type(error).__name__)
+    print(error)
+
+    xgb_model = None
+    preprocessor = None
+    feature_columns = None
+
+
+# =========================================================
 # Database Connection
 # =========================================================
 
@@ -100,7 +171,8 @@ def get_connection():
         port=int(os.getenv("DB_PORT", "3306")),
         user=os.getenv("DB_USER"),
         password=os.getenv("DB_PASSWORD"),
-        database=os.getenv("DB_NAME")
+        database=os.getenv("DB_NAME"),
+        ssl=True
     )
 
 
@@ -540,9 +612,7 @@ def delete_account(
 
 @app.get("/")
 def root():
-    return {
-        "message": "Flight Analytics API is running"
-    }
+    return FileResponse("dist/client/index.html")
 
 # =========================================================
 # Dropdown Endpoints
@@ -1251,39 +1321,359 @@ def api_congestion(
 # Prediction Data
 # =========================================================
 
-@app.get("/prediction-data")
-def prediction_data(
-    airline: str,
-    origin: str,
-    destination: str
-):
+def calculate_distance_km(
+    origin_code: str,
+    destination_code: str
+) -> float:
 
-    query = get_query(
-        "Prediction Data.sql",
-        "Prediction Data"
-    )
+    origin_code = origin_code.upper()
+    destination_code = destination_code.upper()
 
-    return execute_query(
-        query,
-        (
-            airline,
-            origin,
-            destination
-        )
-    )
-
-
-@app.post("/predict")
-def api_predict(request: PredictionRequest):
-    try:
-        hour = int(request.scheduledDepartureTime[:2])
-    except (TypeError, ValueError):
+    if origin_code not in AIRPORTS:
         raise HTTPException(
             status_code=422,
-            detail="scheduledDepartureTime must be HHMM"
+            detail=(
+                f"Airport {origin_code} does not have "
+                "coordinates available."
+            )
         )
 
-    # Route delay rate
+    if destination_code not in AIRPORTS:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                f"Airport {destination_code} does not have "
+                "coordinates available."
+            )
+        )
+
+    # airports.json stores [longitude, latitude]
+    origin_lon, origin_lat = AIRPORTS[origin_code]
+    destination_lon, destination_lat = AIRPORTS[destination_code]
+
+    earth_radius_km = 6371.0
+
+    lat1 = math.radians(origin_lat)
+    lat2 = math.radians(destination_lat)
+
+    dlat = math.radians(
+        destination_lat - origin_lat
+    )
+
+    dlon = math.radians(
+        destination_lon - origin_lon
+    )
+
+    a = (
+        math.sin(dlat / 2) ** 2
+        + math.cos(lat1)
+        * math.cos(lat2)
+        * math.sin(dlon / 2) ** 2
+    )
+
+    c = 2 * math.atan2(
+        math.sqrt(a),
+        math.sqrt(1 - a)
+    )
+
+    return earth_radius_km * c
+
+# =========================================================
+# Prediction
+# =========================================================
+
+@app.post("/predict")
+async def api_predict(request: PredictionRequest):
+
+    # =====================================================
+    # 1. Check ML model
+    # =====================================================
+
+    if (
+        xgb_model is None
+        or preprocessor is None
+        or feature_columns is None
+    ):
+        raise HTTPException(
+            status_code=503,
+            detail="FlyWise ML model is not available"
+        )
+
+    # =====================================================
+    # 2. Validate request
+    # =====================================================
+
+    airline_code = request.airlineCode.strip().upper()
+    origin_code = request.origin.strip().upper()
+    destination_code = request.destination.strip().upper()
+
+    if not airline_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Airline code is required"
+        )
+
+    if not origin_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Origin airport is required"
+        )
+
+    if not destination_code:
+        raise HTTPException(
+            status_code=422,
+            detail="Destination airport is required"
+        )
+
+    try:
+
+        flight_date = datetime.strptime(
+            request.flightDate,
+            "%Y-%m-%d"
+        )
+
+        scheduled_departure = datetime.fromisoformat(
+            request.scheduledDeparture.replace(
+                "Z",
+                "+00:00"
+            )
+        )
+
+        scheduled_arrival = datetime.fromisoformat(
+            request.scheduledArrival.replace(
+                "Z",
+                "+00:00"
+            )
+        )
+
+    except (ValueError, TypeError):
+
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Invalid flight date or schedule. "
+                "Expected YYYY-MM-DD and ISO datetime values."
+            )
+        )
+
+    # =====================================================
+    # 3. Calculate scheduled flight duration
+    # =====================================================
+
+    elapsed_seconds = (
+        scheduled_arrival - scheduled_departure
+    ).total_seconds()
+
+    crs_elapsed_time = elapsed_seconds / 60
+
+    if crs_elapsed_time <= 0:
+        raise HTTPException(
+            status_code=422,
+            detail=(
+                "Scheduled arrival must be after "
+                "scheduled departure."
+            )
+        )
+    
+
+    # =====================================================
+    # 4. Calculate route distance
+    # =====================================================
+
+    distance_km = calculate_distance_km(
+        origin_code,
+        destination_code
+    )
+
+    # BTS distance is in miles.
+    # Convert km → miles because the ML model
+    # was trained using the BTS distance feature.
+
+    distance = distance_km * 0.621371
+
+    # =====================================================
+    # 6. Construct ML features
+    # =====================================================
+
+    ml_input = {
+
+        "reporting_airline":
+            airline_code,
+
+        "origin":
+            origin_code,
+
+        "dest":
+            destination_code,
+
+        "crs_elapsed_time":
+            float(crs_elapsed_time),
+
+        "distance":
+            float(distance),
+
+        "month":
+            flight_date.month,
+
+        "day_of_week":
+            flight_date.weekday(),
+
+        "dep_hour":
+            scheduled_departure.hour,
+
+        "dep_minute":
+            scheduled_departure.minute,
+
+        "arr_hour":
+            scheduled_arrival.hour,
+
+        "arr_minute":
+            scheduled_arrival.minute
+    }
+
+    # =====================================================
+    # 7. Convert to DataFrame
+    # =====================================================
+
+    input_df = pd.DataFrame(
+        [ml_input]
+    )
+
+    try:
+
+        input_df = input_df[
+            feature_columns
+        ]
+
+    except KeyError as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "ML feature mismatch: "
+                f"{str(error)}"
+            )
+        )
+
+    # =====================================================
+    # 8. Apply training preprocessing
+    # =====================================================
+
+    try:
+
+        processed_input = (
+            preprocessor.transform(
+                input_df
+            )
+        )
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "ML preprocessing failed: "
+                f"{str(error)}"
+            )
+        )
+
+    # =====================================================
+    # 9. XGBoost prediction
+    # =====================================================
+
+    try:
+
+        delay_probability = float(
+            xgb_model.predict_proba(
+                processed_input
+            )[0, 1]
+        )
+
+    except Exception as error:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "ML prediction failed: "
+                f"{str(error)}"
+            )
+        )
+
+
+    # =====================================================
+    # 10. Get historical delay rates
+    # =====================================================
+
+    # Get airline ID
+    airlines_query = get_query(
+        "Dropdown.sql",
+        "Airlines"
+    )
+
+    airlines = execute_query(
+        airlines_query
+    )
+
+    airline_row = next(
+        (
+            row for row in airlines
+            if row["airline_code"] == airline_code
+        ),
+        None
+    )
+
+    if not airline_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airline {airline_code} not found"
+        )
+
+    airline_id = airline_row["airline_id"]
+
+
+    # Get airport IDs
+    airports_query = get_query(
+        "Dropdown.sql",
+        "Airports"
+    )
+
+    airports = execute_query(
+        airports_query
+    )
+
+    origin_row = next(
+        (
+            row for row in airports
+            if row["airport_code"] == origin_code
+        ),
+        None
+    )
+
+    destination_row = next(
+        (
+            row for row in airports
+            if row["airport_code"] == destination_code
+        ),
+        None
+    )
+
+    if not origin_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airport {origin_code} not found"
+        )
+
+    if not destination_row:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Airport {destination_code} not found"
+        )
+
+    origin_id = origin_row["airport_id"]
+    destination_id = destination_row["airport_id"]
+
+
+    # Route + airline historical delay rate
     route_query = get_query(
         "Prediction Data.sql",
         "Route delay rate"
@@ -1292,19 +1682,21 @@ def api_predict(request: PredictionRequest):
     route_result = execute_query(
         route_query,
         (
-            request.originAirportId,
-            request.destAirportId,
-            request.airlineId
+            origin_id,
+            destination_id,
+            airline_id
         )
     )
 
-    route_rate = (
-        route_result[0]["delayRate"]
+    route_delay_rate = (
+        float(route_result[0]["delayRate"])
         if route_result
+        and route_result[0]["delayRate"] is not None
         else None
     )
 
-    # Hourly delay rate
+
+    # Departure-hour historical delay rate
     hourly_query = get_query(
         "Prediction Data.sql",
         "Hourly delay rate"
@@ -1313,74 +1705,175 @@ def api_predict(request: PredictionRequest):
     hourly_result = execute_query(
         hourly_query,
         (
-            request.originAirportId,
-            hour
+            origin_id,
+            scheduled_departure.hour
         )
     )
 
-    hourly_rate = (
-        hourly_result[0]["delayRate"]
+    hourly_delay_rate = (
+        float(hourly_result[0]["delayRate"])
         if hourly_result
+        and hourly_result[0]["delayRate"] is not None
         else None
     )
 
-    # Detailed prediction data
-    prediction_query = get_query(
-        "Prediction Data.sql",
-        "Prediction Data"
-    )
-
-    prediction_result = execute_query(
-        prediction_query,
-        (
-            request.airlineId,
-            request.originAirportId,
-            request.destAirportId
-        )
-    )
-
-    detailed_data = (
-        prediction_result[0]
-        if prediction_result
-        else None
-    )
-
-    # Calculate prediction score
-    rates = [
-        rate for rate in (
-            route_rate,
-            hourly_rate
-        )
-        if rate is not None
-    ]
-
-    score = (
-        float(sum(rates) / len(rates))
-        if rates
-        else 0.0
-    )
-
-    historical = {
-        "routeDelayRate": (
-            float(route_rate)
-            if route_rate is not None
-            else None
-        ),
-        "hourlyDelayRate": (
-            float(hourly_rate)
-            if hourly_rate is not None
-            else None
-        ),
-        "predictionData": detailed_data
-    }
+    # =====================================================
+    # 10. Return result
+    # =====================================================
 
     return api_success({
-        "score": score,
-        "label": (
-            "DELAYED"
-            if score >= 0.5
-            else "ON_TIME"
-        ),
-        "modelVersion": "historical-rate-v1",
-        "historical": historical
+
+        "score":
+            delay_probability,
+
+        "label":
+            (
+                "DELAYED"
+                if delay_probability >= 0.5
+                else "ON_TIME"
+            ),
+
+        "modelVersion":
+            "xgboost-v1",
+
+        # Kept for compatibility with the existing
+        # React PredictionResult interface.
+        "historical": {
+            "routeDelayRate": route_delay_rate,
+            "hourlyDelayRate": hourly_delay_rate,
+        }
     })
+
+# @app.get("/prediction-data")
+# def prediction_data(
+#     airline: str,
+#     origin: str,
+#     destination: str
+# ):
+
+#     query = get_query(
+#         "Prediction Data.sql",
+#         "Prediction Data"
+#     )
+
+#     return execute_query(
+#         query,
+#         (
+#             airline,
+#             origin,
+#             destination
+#         )
+#     )
+
+
+# @app.post("/predict")
+# def api_predict(request: PredictionRequest):
+#     try:
+#         hour = int(request.scheduledDepartureTime[:2])
+#     except (TypeError, ValueError):
+#         raise HTTPException(
+#             status_code=422,
+#             detail="scheduledDepartureTime must be HHMM"
+#         )
+
+#     # Route delay rate
+#     route_query = get_query(
+#         "Prediction Data.sql",
+#         "Route delay rate"
+#     )
+
+#     route_result = execute_query(
+#         route_query,
+#         (
+#             request.originAirportId,
+#             request.destAirportId,
+#             request.airlineId
+#         )
+#     )
+
+#     route_rate = (
+#         route_result[0]["delayRate"]
+#         if route_result
+#         else None
+#     )
+
+#     # Hourly delay rate
+#     hourly_query = get_query(
+#         "Prediction Data.sql",
+#         "Hourly delay rate"
+#     )
+
+#     hourly_result = execute_query(
+#         hourly_query,
+#         (
+#             request.originAirportId,
+#             hour
+#         )
+#     )
+
+#     hourly_rate = (
+#         hourly_result[0]["delayRate"]
+#         if hourly_result
+#         else None
+#     )
+
+#     # Detailed prediction data
+#     prediction_query = get_query(
+#         "Prediction Data.sql",
+#         "Prediction Data"
+#     )
+
+#     prediction_result = execute_query(
+#         prediction_query,
+#         (
+#             request.airlineId,
+#             request.originAirportId,
+#             request.destAirportId
+#         )
+#     )
+
+#     detailed_data = (
+#         prediction_result[0]
+#         if prediction_result
+#         else None
+#     )
+
+#     # Calculate prediction score
+#     rates = [
+#         rate for rate in (
+#             route_rate,
+#             hourly_rate
+#         )
+#         if rate is not None
+#     ]
+
+#     score = (
+#         float(sum(rates) / len(rates))
+#         if rates
+#         else 0.0
+#     )
+
+#     historical = {
+#         "routeDelayRate": (
+#             float(route_rate)
+#             if route_rate is not None
+#             else None
+#         ),
+#         "hourlyDelayRate": (
+#             float(hourly_rate)
+#             if hourly_rate is not None
+#             else None
+#         ),
+#         "predictionData": detailed_data
+#     }
+
+#     return api_success({
+#         "score": score,
+#         "label": (
+#             "DELAYED"
+#             if score >= 0.5
+#             else "ON_TIME"
+#         ),
+#         "modelVersion": "historical-rate-v1",
+#         "historical": historical
+#     })

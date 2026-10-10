@@ -49,7 +49,7 @@ export default function PredictionPage({
     setError('');
     setLoading(true);
     try {
-      setResult(await predictFlight(f, dims.airports, dims.airlines));
+      setResult(await predictFlight(f));
     } catch (e) {
       setError((e as Error).message);
     } finally {

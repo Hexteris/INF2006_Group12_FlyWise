@@ -216,108 +216,33 @@ SELECT
     
 
 -- Delay trend by month --
-SELECT 
-    DATE_FORMAT(f.flight_date, '%b') AS month,
-    COUNT(*) AS total_flights,
-    ROUND(100.0 * SUM(CASE
-                WHEN f.arrival_delay > 15 THEN 1
-                ELSE 0
-            END) / COUNT(*),
-            2) AS delay_rate,
-    ROUND(AVG(f.arrival_delay), 2) AS avg_delay
-FROM
-    flights f
-WHERE
-    f.cancelled = 0 AND f.diverted = 0
-GROUP BY MONTH(f.flight_date) , DATE_FORMAT(f.flight_date, '%b')
-ORDER BY MONTH(f.flight_date);
+SELECT
+    month_name AS month,
+    total_flights,
+    delay_rate,
+    avg_delay
+FROM monthly_delay_summary
+ORDER BY month_num;
 
 
 -- Delay trend by hour --
-SELECT 
-    CONCAT(LPAD(HOUR(f.scheduled_departure), 2, '0'),
-            ':00') AS departure_hour,
-    COUNT(*) AS total_flights,
-    ROUND(100.0 * SUM(CASE
-                WHEN f.arrival_delay > 15 THEN 1
-                ELSE 0
-            END) / COUNT(*),
-            2) AS delay_rate,
-    ROUND(AVG(f.arrival_delay), 2) AS avg_delay
-FROM
-    flights f
-WHERE
-    f.cancelled = 0 AND f.diverted = 0
-GROUP BY HOUR(f.scheduled_departure)
+SELECT
+    CONCAT(LPAD(departure_hour, 2, '0'), ':00') AS departure_hour,
+    total_flights,
+    delay_rate,
+    avg_delay
+FROM hourly_delay_summary
 ORDER BY departure_hour;
 
 
 -- Delay cause analytics --
 
 SELECT
-    causes.delay_cause,
-    causes.delay_hours,
-    ROUND(
-        100.0 * causes.delay_hours / totals.total_delay_hours,
-        2
-    ) AS delay_percentage
-FROM (
-    SELECT
-        'Carrier' AS delay_cause,
-        ROUND(SUM(COALESCE(carrier_delay, 0)) / 60, 1) AS delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-
-    UNION ALL
-
-    SELECT
-        'Weather' AS delay_cause,
-        ROUND(SUM(COALESCE(weather_delay, 0)) / 60, 1) AS delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-
-    UNION ALL
-
-    SELECT
-        'NAS' AS delay_cause,
-        ROUND(SUM(COALESCE(nas_delay, 0)) / 60, 1) AS delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-
-    UNION ALL
-
-    SELECT
-        'Security' AS delay_cause,
-        ROUND(SUM(COALESCE(security_delay, 0)) / 60, 1) AS delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-
-    UNION ALL
-
-    SELECT
-        'Late Aircraft' AS delay_cause,
-        ROUND(SUM(COALESCE(late_aircraft_delay, 0)) / 60, 1) AS delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-) causes
-
-CROSS JOIN (
-    SELECT
-        ROUND(
-            (
-                SUM(COALESCE(carrier_delay, 0)) +
-                SUM(COALESCE(weather_delay, 0)) +
-                SUM(COALESCE(nas_delay, 0)) +
-                SUM(COALESCE(security_delay, 0)) +
-                SUM(COALESCE(late_aircraft_delay, 0))
-            ) / 60,
-            1
-        ) AS total_delay_hours
-    FROM flights
-    WHERE arrival_delay > 15
-) totals
-
-ORDER BY causes.delay_hours DESC;
+    delay_cause,
+    delay_hours,
+    delay_percentage
+FROM delay_cause_summary
+ORDER BY delay_hours DESC;
 
 
 -- Airline + Route analytics --

@@ -1,0 +1,13 @@
+[
+    "reporting_airline",
+    "origin",
+    "dest",
+    "crs_elapsed_time",
+    "distance",
+    "month",
+    "day_of_week",
+    "dep_hour",
+    "dep_minute",
+    "arr_hour",
+    "arr_minute"
+]
