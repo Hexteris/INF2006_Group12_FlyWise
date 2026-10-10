@@ -71,7 +71,7 @@ export const fetchSummary = () => request<Summary>('/summary');
 
 export const fetchRoutePerformance = (
   params: { airlineId?: number; originId?: number; limit?: number } = {}
-) => request<RoutePerformanceRow[]>(`/airlines${query(params)}`);
+) => request<RoutePerformanceRow[]>(`/airlines/performance${query(params)}`);
 
 export const fetchCongestion = (params: { airportId?: number; limit?: number } = {}) =>
   request<CongestionRow[]>(`/airports/congestion${query(params)}`);
@@ -142,9 +142,6 @@ export const fetchAirlineRouteAnalytics = (
 ) => requestRaw<ApiRow[]>(
   `/analytics/airline-route${query({ airline, origin, destination })}`
 );
-
-export const fetchPredictionData = (airline: string, origin: string, destination: string) =>
-  requestRaw<ApiRow[]>(`/prediction-data${query({ airline, origin, destination })}`);
 
 export const fetchLiveFlights = (
   airport: string,

@@ -1,7 +1,7 @@
 import { useState, useEffect, memo, useCallback } from 'react';
 import type { Page, User } from '../../types';
 import { MOBILE_ONLY, DESKTOP_ONLY, FOCUS_VISIBLE, BUTTON_SECONDARY } from '../styles';
-import logo from '/src/Flywise Logo.jpg';
+import logo from '../../Flywise Logo.jpg';
 
 export type AppView = Page;
 

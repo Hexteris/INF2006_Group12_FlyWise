@@ -1,7 +1,11 @@
 node_modules/
-dist/*
-!dist/client/
-!dist/client/**
+/dist/*
+!/dist/client/
+!/dist/client/**
+/src/node_modules/
+/src/dist/*
+!/src/dist/client/
+!/src/dist/client/**
 build/
 __pycache__/
 *.pyc

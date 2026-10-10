@@ -29,7 +29,7 @@ Flight delays can significantly affect passengers and airline operations, while 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
+python -m pip install -r src\requirements.txt
 
 $env:DB_HOST = "127.0.0.1"
 $env:DB_PORT = "3306"
@@ -39,23 +39,46 @@ $env:DB_NAME = "group_project"
 $env:AVIATIONSTACK_API_KEY = "<your-api-key>"
 $env:AVIATIONSTACK_BASE_URL = "http://api.aviationstack.com/v1"
 
-python -m uvicorn FastAPI:app --reload --port 8000
+python -m uvicorn src.FastAPI:app --reload --port 8000
 ```
 
 ### Frontend
 
 ```powershell
-npm install
+npm --prefix src install
 $env:VITE_API_URL = "http://localhost:8000"
-npm run dev
+npm --prefix src run dev
 ```
 
 * Frontend: `http://localhost:3000`
 * API Docs: `http://localhost:8000/docs`
 
+Copy `src/.env.example` to the repository-root `.env` and fill in the required
+database and Aviationstack values before starting the backend.
+
+Before starting the backend, run these scripts against the `group_project`
+database in MySQL Workbench to create and populate the analytics summary tables:
+
+* `src/SQL Queries/monthly_delay_summary.sql`
+* `src/SQL Queries/hourly_delay_summary.sql`
+* `src/SQL Queries/delay_cause_summary.sql`
+
+Rerun them after refreshing the historical flight data so the analytics remain
+up to date.
+
+### Docker
+
+Build the frontend before building the application image:
+
+```powershell
+npm --prefix src install
+npm --prefix src run build
+docker compose -f src\docker-compose.yml up --build
+```
+
 ## Architecture
 
-![FlyWise Architecture](docs/architecture.png)
+![FlyWise Architecture](evidence/architecture.png)
 
 React/Vite frontend (:3000)
         |  ↑
@@ -111,10 +134,14 @@ DELETE /upcoming-saved-flights/{id}
 ## Checks
 
 ```powershell
-npm run type-check
-npm run lint
-python -m py_compile FastAPI.py
+npm --prefix src run type-check
+npm --prefix src run lint
+python -m py_compile src\FastAPI.py
 ```
+
+The runnable application code and its build/deployment configuration are in
+`src/`. The required `data/`, `analytics/`, `evidence/`, and `tests/`
+submission folders remain at the repository root.
 
 ## Known Limitations
 

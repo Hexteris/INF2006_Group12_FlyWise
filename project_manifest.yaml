@@ -1,0 +1,110 @@
+project:
+  group_id: "Group 12"
+  title: "FlyWise - Cloud-Based Flight Delay Prediction & Intelligence Application"
+  problem_statement: "Passengers lack data-driven insights regarding the likelihood, timing, and severity of flight delays, creating a need for predictive machine learning analytics to identify delay patterns and provide more meaningful information about potential flight-delay risks."
+  cloud_provider: "AWS"
+  repository_commit: "Final"
+
+team:
+  members:
+    - name: "Chong Xin Huei"
+      student_id: "2502122"
+      role: "Machine Learning and Data Analytics"
+    - name: "Damien Teh Zhanrong"
+      student_id: "2500837"
+      role: "Report Preparation and Architecture Documentation"
+    - name: "Daniel Tay Zhu Hao"
+      student_id: "2501690"
+      role: "Frontend UI & UX"
+    - name: "Wong Jinghong"
+      student_id: "2503049"
+      role: "Backend & Database, Web and API Integration"
+    - name: "Wong Zheng Sheng, Jasper"
+      student_id: "2500024"
+      role: "AWS Cloud Deployment"
+
+architecture:
+  diagram: "evidence/architecture.png"
+  service_model: "IaaS + managed services (EC2 for compute; RDS, ALB, Auto Scaling, CloudWatch and S3 as managed services)"
+  deployment_model: "Public cloud (AWS, us-east-1)"
+  components:
+    - name: "Application Load Balancer"
+      type: "load balancer"
+      role: "Receives HTTP :80 traffic and forwards it to the target group on :8000"
+    - name: "EC2 instances (INF2006-WebServer1, INF2006-WebServer2)"
+      type: "compute"
+      role: "Run the flywise-app Docker container (React build, FastAPI, XGBoost inference) in two AZs"
+    - name: "EC2 Auto Scaling group"
+      type: "scaling"
+      role: "Target tracking on CPU at 40% to add or remove instances"
+    - name: "Amazon RDS for MariaDB (Multi-AZ)"
+      type: "database"
+      role: "Stores flight history, users and saved flights; synchronous standby in a second AZ"
+    - name: "Amazon S3"
+      type: "storage"
+      role: "Private bucket holding the raw dataset, flight_data_final.csv"
+    - name: "Amazon CloudWatch"
+      type: "monitoring"
+      role: "CPU metrics and alarms that drive Auto Scaling"
+    - name: "Aviationstack API"
+      type: "external service"
+      role: "Live and upcoming flight data, called by the backend"
+    - name: "Security groups"
+      type: "network security"
+      role: "Restrict EC2 :8000 to the ALB and database access to the application"
+
+evidence:
+  functional_test: "evidence/test-functional.md"
+  security_test: "evidence/test-security.md"
+  data_ai_test: "evidence/test-data-ai.md"
+  scale_resilience_test: "evidence/test-resilience.md"
+  monitoring: "evidence/monitoring.md"
+
+data_ai:
+  dataset: "data/README.md"
+  method: >-
+    XGBoost binary classifier predicting whether a U.S. domestic flight departs
+    at least 15 minutes late (BTS DepDel15), using 11 pre-departure features:
+    airline, origin, destination, scheduled duration, distance, month, day of
+    week, and scheduled departure and arrival hours and minutes. Trained on
+    6,879,485 cleaned 2025 BTS flights. One-hot encoding and median imputation
+    were fitted on training rows only. RandomizedSearchCV tuning used 10
+    candidates and 3 folds with ROC-AUC scoring. Class imbalance was addressed
+    using scale_pos_weight=3.61. The model was compared against Logistic
+    Regression, Decision Tree and Random Forest classifiers. The final model
+    is served through FastAPI POST /predict.
+  evaluation: >-
+    Stratified 80/20 hold-out evaluation on 1,375,897 test flights: ROC-AUC
+    0.712, recall 0.666, precision 0.340, F1 0.450 and PR-AUC 0.409.
+    Temporal hold-out evaluation, training on January to September and testing
+    on October to December, achieved ROC-AUC 0.677. The deployed model
+    artefacts were re-scored on 10 October 2026 and reproduced the recorded
+    metrics. Scores are uncalibrated risk scores, not calibrated probabilities.
+    Details: evidence/test-data-ai.md
+  reproducible_command: >-
+    pip install -r analytics/requirements.txt &&
+    python analytics/evaluate_model.py --raw-dir
+    "<folder with flight_delays_2025_*.csv>"
+
+security:
+  threat_control_map: "evidence/threat-control-map.md"
+  secrets_handling: ""
+
+run:
+  url: "http://inf2006-flywise-alb-1672116072.us-east-1.elb.amazonaws.com/"
+  # The prerequisites and commands below are for local development and testing. 
+  # The deployed application is already running on AWS Cloud using the URL above.
+  prerequisites:
+    - "Node.js and npm"
+    - "Python and pip"
+    - "Access to a configured MariaDB database"
+    - "Environment variables configured for database connectivity and application settings"
+  commands:
+    - "pip install -r requirements.txt"
+    - "npm install"
+    - "Start the FastAPI backend"
+    - "Start the React frontend"
+
+declarations:
+  ai_use: "AI_USE_DECLARATION.md"
+  contributions: "TEAM_CONTRIBUTIONS.md"

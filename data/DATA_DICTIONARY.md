@@ -1,20 +1,16 @@
 # FlyWise Data Dictionary
 
-This document describes the real MySQL/MariaDB schema used by `FastAPI.py`.
-The database is maintained in MySQL Workbench and is not created by the React
-frontend or by the application container.
+This document describes the MySQL/MariaDB schema used by `src/FastAPI.py`. The database is managed locally using MySQL Workbench and deployed to Amazon RDS for the cloud environment. The database schema is managed separately from the React frontend and application container.
 
 ## Database
 
 ```text
 Database: group_project
-Source: US flight-delay data loaded into MySQL/MariaDB Workbench
-Backend connection: FastAPI.py -> MariaDB Connector/Python
+Database service: Amazon RDS for MariaDB
+Backend: src/FastAPI.py
+Database connectivity: MariaDB Connector/Python
+Schema reference: The tables and column definitions below describe the deployed database schema and should be verified against the current AWS RDS.
 ```
-
-The application currently reports 14 airlines, 352 airports, 6,938 routes, and
-7,001,619 flights for the connected dataset. Counts depend on the data loaded in
-the Workbench database.
 
 ## Tables
 
@@ -120,5 +116,5 @@ endpoints still calculate results directly from `flights`.
 ## Related files
 
 - `Raw SQL & Cleaning/Data Population.sql` - schema and population SQL
-- `SQL Queries/` - queries loaded by FastAPI
-- `FastAPI.py` - database connection and API endpoints
+- `src/SQL Queries/` - queries loaded by FastAPI
+- `src/FastAPI.py` - database connection and API endpoints
