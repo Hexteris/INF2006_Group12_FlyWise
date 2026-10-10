@@ -13,9 +13,11 @@ coverage/
 .nyc_output
 *.pyc
 __pycache__/
+.pytest_cache/
 
 # Environment variables
 .env
+.venv/
 
 # Source data - flight_project_cleaned.csv is ~895 MB. Never commit it.
 # Obtain it separately and place it in the repo root; see data/DATA_DICTIONARY.md.
