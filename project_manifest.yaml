@@ -102,8 +102,8 @@ run:
   commands:
     - "pip install -r requirements.txt"
     - "npm install"
-    - "Start the FastAPI backend"
-    - "Start the React frontend"
+    - "python -m uvicorn src.FastAPI:app --reload"
+    - "npm --prefix src run dev"
 
 declarations:
   ai_use: "AI_USE_DECLARATION.md"

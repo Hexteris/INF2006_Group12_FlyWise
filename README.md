@@ -2,6 +2,10 @@
 
 **INF2006 Group 12 — Flight Delay Analytics and Prediction Platform**
 
+**FlyWise:** http://inf2006-flywise-alb-1672116072.us-east-1.elb.amazonaws.com/
+
+The application is deployed on AWS. The local setup instructions below are provided for development and testing.
+
 ## Problem Statement
 
 Flight delays can significantly affect passengers and airline operations, while large amounts of flight data can be difficult to interpret. **FlyWise** combines historical flight data, live flight information and machine learning to provide flight search, delay analytics, live flight tracking and delay-risk predictions through a web-based platform.
@@ -80,6 +84,17 @@ docker compose -f src\docker-compose.yml up --build
 
 ![FlyWise Architecture](evidence/architecture.png)
 
+The deployed FlyWise application uses AWS infrastructure to serve the web application, process API requests and store flight data. The Application Load Balancer distributes incoming requests to the backend application hosted on EC2 instances, while Amazon RDS provides managed database services.
+
+Frontend: Web interface accessed through the deployed application URL.
+Application Load Balancer (ALB): Receives incoming HTTP requests and routes traffic to registered targets.
+Amazon EC2: Hosts the application services.
+Amazon EC2 Auto Scaling: Manages the number of application instances according to the configured scaling policies.
+Amazon RDS: Stores historical flight data and analytics.
+Aviationstack API: Supplies live flight information to the backend.
+
+The frontend communicates with the FastAPI backend through HTTP API requests. The backend retrieves historical data and analytics from the database and obtains live flight information from Aviationstack.
+
 React/Vite frontend (:3000)
         |  ↑
         |  JWT Auth (LocalStorage)
@@ -99,7 +114,7 @@ MySQL/MariaDB Workbench (historical data and analytics)
 * **Data Processing:** pandas, NumPy
 * **Authentication:** JWT, bcrypt
 * **External API:** Aviationstack
-* **Deployment:** AWS S3, CloudFront, App Runner/ECS, RDS
+* **Deployment:** AWS S3, ALB, App Runner/ECS, RDS
 
 ## Features
 
@@ -156,16 +171,25 @@ submission folders remain at the repository root.
 ## AWS Deployment
 
 ```text
-React/Vite → S3 + CloudFront
-                 |
-              FastAPI
-                 |
-             Amazon RDS
-                 |
-           Aviationstack
+Users
+  |
+  v
+Application Load Balancer (ALB)
+  |
+  v
+EC2 Auto Scaling Group
+  |
+  v
+FlyWise Application / FastAPI Backend
+  |                         |
+  v                         v
+Amazon RDS              Aviationstack API
+(Historical Data,       (Live Flight Data)
+ Analytics and
+ User Data)
 ```
 
-Production backend environment variables:
+The backend uses environment variables to configure database connectivity, authentication and external API access. Sensitive credentials are configured separately from the source code.
 
 ```text
 DB_HOST
@@ -176,5 +200,10 @@ DB_NAME
 JWT_SECRET_KEY
 AVIATIONSTACK_API_KEY
 AVIATIONSTACK_BASE_URL
-VITE_API_URL
 ```
+
+VITE_API_URL is used to configure the frontend API endpoint where required by the frontend build and deployment configuration.
+
+**Local Development**
+
+Refer to the Quick Start section above for instructions to install dependencies, configure environment variables, initialise the database and run FlyWise locally.
