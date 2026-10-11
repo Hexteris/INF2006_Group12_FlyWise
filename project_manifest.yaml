@@ -1,5 +1,5 @@
 project:
-  group_id: "Group 12"
+  group_id: "G12"
   title: "FlyWise - Cloud-Based Flight Delay Prediction & Intelligence Application"
   problem_statement: "Passengers lack data-driven insights regarding the likelihood, timing, and severity of flight delays, creating a need for predictive machine learning analytics to identify delay patterns and provide more meaningful information about potential flight-delay risks."
   cloud_provider: "AWS"
@@ -95,6 +95,7 @@ data_ai:
   reproducible_command: >-
     python -m pip install -r analytics/requirements-evaluation.txt &&
     python analytics/evaluate_model.py
+    --data "<path to flight_data_final.csv>"
     --artifacts "src/ML Model"
     --feature-spec analytics/evaluation_config.json
     --out evidence/model_evaluation
