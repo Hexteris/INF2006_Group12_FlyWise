@@ -34,4 +34,3 @@ All design decisions and final code were reviewed and accepted by team members, 
 - AI output was used under the tool provider's terms of service. No licensed third-party code was knowingly reproduced through AI output.
 - Open-source dependencies are used under their own licences
 - Aviationstack data is used under the Aviationstack API terms.
-- FlyWise code is licensed under MIT.
