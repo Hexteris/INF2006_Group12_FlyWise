@@ -3,7 +3,8 @@ project:
   title: "FlyWise - Cloud-Based Flight Delay Prediction & Intelligence Application"
   problem_statement: "Passengers lack data-driven insights regarding the likelihood, timing, and severity of flight delays, creating a need for predictive machine learning analytics to identify delay patterns and provide more meaningful information about potential flight-delay risks."
   cloud_provider: "AWS"
-  repository_commit: "Final"
+  # Optional: enter the actual source commit SHA when packaging.
+  repository_commit: ""
 
 team:
   members:
@@ -39,19 +40,19 @@ architecture:
       role: "Target tracking on CPU at 40% to add or remove instances"
     - name: "Amazon RDS for MariaDB (Multi-AZ)"
       type: "database"
-      role: "Stores flight history, users and saved flights; synchronous standby in a second AZ"
+      role: "Stores flight history, users and saved flights; standby in a second AZ"
     - name: "Amazon S3"
       type: "storage"
-      role: "Private bucket holding the raw dataset, flight_data_final.csv"
+      role: "Private bucket holding flight_data_final.csv; automated ingestion is not established by the available documentation"
     - name: "Amazon CloudWatch"
       type: "monitoring"
       role: "CPU metrics and alarms that drive Auto Scaling"
     - name: "Aviationstack API"
       type: "external service"
-      role: "Live and upcoming flight data, called by the backend"
+      role: "Live flight information, called by the backend separately from model inference"
     - name: "Security groups"
       type: "network security"
-      role: "Restrict EC2 :8000 to the ALB and database access to the application"
+      role: "Restrict database access to the application tier; final ALB-only access to EC2 :8000 requires verification"
 
 evidence:
   functional_test: "evidence/test-functional.md"
@@ -63,55 +64,76 @@ evidence:
 data_ai:
   dataset: "data/README.md"
   method: >-
-    XGBoost binary classifier predicting whether a U.S. domestic flight departs
-    at least 15 minutes late (BTS DepDel15), using 11 pre-departure features:
-    airline, origin, destination, scheduled duration, distance, month, day of
-    week, and scheduled departure and arrival hours and minutes. Trained on
-    6,879,485 cleaned 2025 BTS flights. One-hot encoding and median imputation
-    were fitted on training rows only. RandomizedSearchCV tuning used 10
-    candidates and 3 folds with ROC-AUC scoring. Class imbalance was addressed
-    using scale_pos_weight=3.61. The model was compared against Logistic
-    Regression, Decision Tree and Random Forest classifiers. The final model
-    is served through FastAPI POST /predict.
+    XGBoost binary classifier predicting whether a flight represented
+    in the 2025 U.S. BTS dataset departs at least 15 minutes late
+    (DepDel15). It uses 11 pre-departure features: airline, origin,
+    destination, scheduled duration, distance, month, day of week,
+    and scheduled departure and arrival hours and minutes.
+    The training notebook records 6,879,485 eligible flights and an
+    80/20 stratified split with random_state=42. Numeric median
+    imputation and categorical most-frequent imputation followed by
+    one-hot encoding were fitted on training rows only.
+    RandomizedSearchCV used 10 candidates, three-fold cross-validation
+    and ROC-AUC scoring on a stratified 300,000-row training sample.
+    Class imbalance was addressed using scale_pos_weight approximately
+    3.61. The final model was fitted on the full training split and
+    exported for FastAPI POST /predict.
   evaluation: >-
-    Stratified 80/20 hold-out evaluation on 1,375,897 test flights: ROC-AUC
-    0.712, recall 0.666, precision 0.340, F1 0.450 and PR-AUC 0.409.
-    Temporal hold-out evaluation, training on January to September and testing
-    on October to December, achieved ROC-AUC 0.677. The deployed model
-    artefacts were re-scored on 10 October 2026 and reproduced the recorded
-    metrics. Scores are uncalibrated risk scores, not calibrated probabilities.
-    Details: evidence/test-data-ai.md
+    On 11 October 2026 at 04:55 UTC, the saved shared-Drive model
+    and preprocessor were reevaluated on the original stratified
+    held-out split of 1,375,897 flights. The run reproduced accuracy
+    0.6463645, precision 0.3394516, recall 0.6661206, F1 0.4497254
+    and ROC-AUC 0.7119550. The confusion matrix was
+    [[690502, 386907], [99659, 198829]], with delayed flights as
+    the positive class. An executed always-on-time baseline achieved
+    accuracy 0.7830593 and zero delayed-class precision, recall and F1.
+    Results, execution output and input hashes are supplied under
+    evidence/model_evaluation/. This verifies the evaluated saved
+    artefacts, not their consistency with the live deployment.
+    Temporal evaluation, PR-AUC, completed comparisons with other
+    classifiers and probability calibration remain unverified.
+    Details: evidence/test-data-ai.md.
   reproducible_command: >-
-    pip install -r analytics/requirements.txt &&
-    python analytics/evaluate_model.py --raw-dir
-    "<folder with flight_delays_2025_*.csv>"
+    python -m pip install -r analytics/requirements-evaluation.txt &&
+    python analytics/evaluate_model.py
+    --data "<path to flight_data_final.csv>"
+    --artifacts "src/ML Model"
+    --feature-spec analytics/evaluation_config.json
+    --out evidence/model_evaluation
 
 security:
   threat_control_map: "evidence/threat-control-map.md"
   secrets_handling: >-
-    Database credentials, the Aviationstack API key, and the JWT
-    authentication key are loaded from environment variables defined in a
-    .env file rather than hardcoded directly in the application code.
-    This reduces the risk of exposing sensitive information in the source
-    code. The .env file and other sensitive files are excluded from
-    version control through .gitignore. Supporting evidence is documented
-    in threat-control-map.md, including database credential loading,
-    Aviationstack API key retrieval, environment variable configuration,
-    and Gitignore screenshots.
+    Database credentials, the Aviationstack API key and the JWT
+    authentication key are supplied through environment variables.
+    Local development loads a repository-root .env file, using
+    src/.env.example as the placeholder template. The .env file is
+    excluded from version control through .gitignore. The database
+    connection requests SSL. Supporting code/configuration evidence
+    is referenced in evidence/threat-control-map.md.
+    Deployment notes record an administrative database account;
+    migration to a least-privilege application account remains
+    unverified. Public application access uses HTTP. Final ALB-only
+    EC2 access and comprehensive secret-handling verification remain
+    outstanding.
 
 run:
   url: "http://inf2006-flywise-alb-1672116072.us-east-1.elb.amazonaws.com/"
-  # The prerequisites and commands below are for local development and testing. 
-  # The deployed application is already running on AWS Cloud using the URL above.
   prerequisites:
     - "Node.js and npm"
-    - "Python and pip"
-    - "Access to a configured MariaDB database"
-    - "Environment variables configured for database connectivity and application settings"
+    - "Python compatible with src/requirements.txt"
+    - "Access to a configured MariaDB database named group_project"
+    - "Required application tables and historical/reference data loaded"
+    - "Repository-root .env configured using src/.env.example"
+    - "Saved model artefacts present in src/ML Model/"
+    - "Aviationstack credentials for live-flight functionality"
+  # Execute from the repository root.
+  # Start the backend and frontend in separate terminals.
   commands:
-    - "pip install -r requirements.txt"
-    - "npm install"
-    - "python -m uvicorn src.FastAPI:app --reload"
+    - "python -m pip install -r src/requirements.txt"
+    - "npm --prefix src install"
+    - "npm --prefix src run build"
+    - "python -m uvicorn src.FastAPI:app --reload --port 8000"
     - "npm --prefix src run dev"
 
 declarations:
