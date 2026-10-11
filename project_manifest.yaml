@@ -88,7 +88,16 @@ data_ai:
 
 security:
   threat_control_map: "evidence/threat-control-map.md"
-  secrets_handling: ""
+  secrets_handling: >-
+    Database credentials, the Aviationstack API key, and the JWT
+    authentication key are loaded from environment variables defined in a
+    .env file rather than hardcoded directly in the application code.
+    This reduces the risk of exposing sensitive information in the source
+    code. The .env file and other sensitive files are excluded from
+    version control through .gitignore. Supporting evidence is documented
+    in threat-control-map.md, including database credential loading,
+    Aviationstack API key retrieval, environment variable configuration,
+    and Gitignore screenshots.
 
 run:
   url: "http://inf2006-flywise-alb-1672116072.us-east-1.elb.amazonaws.com/"
