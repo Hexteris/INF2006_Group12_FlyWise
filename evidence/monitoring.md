@@ -2,7 +2,11 @@
 
 This page collects the image evidence for monitoring the various AWS services used by FlyWise.
 
-## Summary
+## Monitoring observation
+
+CloudWatch provides CPU metrics and target-tracking alarms for the 40% CPU scaling policy. The 3 October 2026 notification at 09:35 UTC records desired capacity decreasing from three to two. Monitoring screenshots are indexed in evidence/monitoring.md. They support the documented observation but do not establish response times or uninterrupted service. A complete written record with observation window, metric statistic/unit, alarm condition and interpretation, supported by dated redacted exports, remains outstanding.
+
+## Supporting artefacts
 
 | # | Evidence | Format | Link |
 |---|----------|--------|------|
