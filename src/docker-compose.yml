@@ -8,6 +8,10 @@ services:
       - ../.env
     environment:
       DB_HOST: ${DB_HOST}
+      DB_PORT: 3306
+      DB_NAME: group_project
+      DB_SSL: "true"
+      DB_HOST: ${DB_HOST}
       DB_PORT: ${DB_PORT}
       DB_USER: ${DB_USER}
       DB_PASSWORD: ${DB_PASSWORD}

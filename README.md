@@ -102,7 +102,7 @@ React/Vite frontend (:3000)
         v  |
 FastAPI backend (:8000) ---- Aviationstack (live flights only)
         |  ↑
-        |  User Auth DB (future)
+        |  User Auth DB 
         v
 MySQL/MariaDB Workbench (historical data and analytics)
 ```
@@ -116,7 +116,7 @@ MySQL/MariaDB Workbench (historical data and analytics)
 * **Data Processing:** pandas, NumPy
 * **Authentication:** JWT, bcrypt
 * **External API:** Aviationstack
-* **Deployment:** AWS S3, ALB, App Runner/ECS, RDS
+* **Deployment:** AWS S3, ALB, RDS
 
 ## Features
 
