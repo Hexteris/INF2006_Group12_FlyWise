@@ -1,0 +1,59 @@
+{
+  "verified_against_training_notebook": true,
+  "cleaning_order": "filter_then_engineer_then_split",
+  "cleaning": {
+    "cancelled": "cancelled",
+    "diverted": "diverted",
+    "date": "flight_date",
+    "date_format": null,
+    "target": "dep_del15"
+  },
+  "features": {
+    "reporting_airline": {
+      "kind": "column",
+      "source": "reporting_airline"
+    },
+    "origin": {
+      "kind": "column",
+      "source": "origin"
+    },
+    "dest": {
+      "kind": "column",
+      "source": "dest"
+    },
+    "crs_elapsed_time": {
+      "kind": "column",
+      "source": "crs_elapsed_time"
+    },
+    "distance": {
+      "kind": "column",
+      "source": "distance"
+    },
+    "month": {
+      "kind": "datetime_part",
+      "source": "flight_date",
+      "part": "month"
+    },
+    "day_of_week": {
+      "kind": "datetime_part",
+      "source": "flight_date",
+      "part": "dayofweek"
+    },
+    "dep_hour": {
+      "kind": "hhmm_hour",
+      "source": "crs_dep_time"
+    },
+    "dep_minute": {
+      "kind": "hhmm_minute",
+      "source": "crs_dep_time"
+    },
+    "arr_hour": {
+      "kind": "hhmm_hour",
+      "source": "crs_arr_time"
+    },
+    "arr_minute": {
+      "kind": "hhmm_minute",
+      "source": "crs_arr_time"
+    }
+  }
+}
