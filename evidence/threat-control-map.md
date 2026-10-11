@@ -23,7 +23,7 @@ This page collects the image evidence for the security and threat control measur
 
 **Description:**
 
-The /me endpoint rejected the request without an authentication token, returning an HTTP status of either 401 or 403 as required by your test.
+The /me endpoint rejected the request without an authentication token, returning an HTTP status of either 401 or 403.
 
 ---
 
