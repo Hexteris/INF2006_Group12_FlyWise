@@ -95,6 +95,7 @@ Aviationstack API: Supplies live flight information to the backend.
 
 The frontend communicates with the FastAPI backend through HTTP API requests. The backend retrieves historical data and analytics from the database and obtains live flight information from Aviationstack.
 
+```text
 React/Vite frontend (:3000)
         |  ↑
         |  JWT Auth (LocalStorage)
@@ -104,6 +105,7 @@ FastAPI backend (:8000) ---- Aviationstack (live flights only)
         |  User Auth DB (future)
         v
 MySQL/MariaDB Workbench (historical data and analytics)
+```
 
 ## Technologies
 
@@ -161,7 +163,7 @@ submission folders remain at the repository root.
 ## Known Limitations
 
 * Live flight data depends on Aviationstack availability and API limits.
-* Predictions depend on the coverage and quality of the historical training data.
+* Prediction accuracy depends on the coverage and quality of the historical training data, which currently includes only U.S. domestic flights. FlyWise can be further scaled to support both domestic and international flight delay predictions by incorporating historical flight data from additional countries and regions.
 * Airport coordinates must be available in `data/airports.json` for prediction distance calculations.
 * Predictions for international flights may have reduced applicability because the model was trained using the 2025 US BTS On-Time Performance dataset.
 * Historical and live flight data come from different sources and may have different coverage.
