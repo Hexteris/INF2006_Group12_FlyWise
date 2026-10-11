@@ -1,0 +1,39 @@
+{
+  "executed_at_utc": "2026-10-11T04:55:09.971040+00:00",
+  "command": "/usr/bin/python3 /content/drive/MyDrive/flywise/analytics/evaluate_model.py --data /content/drive/MyDrive/flywise/flight_data_final.csv --artifacts /content/drive/MyDrive/flywise/flywise final model --feature-spec /content/drive/MyDrive/flywise/analytics/evaluation_config.json --out /content/drive/MyDrive/flywise/analytics/outputs/model_evaluation",
+  "counts": {
+    "input_rows": 7001619,
+    "after_duplicates": 7001619,
+    "after_cancelled_filter": 6898743,
+    "after_diverted_filter": 6879485,
+    "after_invalid_date_filter": 6879485,
+    "after_missing_target_filter": 6879485,
+    "test_rows": 1375897,
+    "train_rows": 5503588
+  },
+  "target_distribution_test": {
+    "0": 1077409,
+    "1": 298488
+  },
+  "threshold": 0.5,
+  "split": {
+    "test_size": 0.2,
+    "random_state": 42,
+    "stratify": true
+  },
+  "input_sha256": {
+    "/content/drive/MyDrive/flywise/flight_data_final.csv": "28f6ec414d39e9898a2580a882a2c2af85ed51783e4c9bc10afd687ee6daba6e",
+    "/content/drive/MyDrive/flywise/analytics/evaluation_config.json": "98f3a9521f3c900bd4d533ade07a1146de4ef9f95441f6944c492a19f6952877",
+    "/content/drive/MyDrive/flywise/flywise final model/xgb_model.json": "49c9c4dc7d206208918097853225da17bf565e75dd7b74eb7ea36a5b84e93b69",
+    "/content/drive/MyDrive/flywise/flywise final model/preprocessor.pkl": "e7592d71f7b4cdb706186cbf7c4ad680851b3303c5c48508504ff1a2c2c3ee0d",
+    "/content/drive/MyDrive/flywise/flywise final model/feature_columns.json": "1235a76b29b6c11fa9260b1f1a5c721f72c99dd410d79f91f5b973299b541774"
+  },
+  "versions": {
+    "python": "3.13.16",
+    "pandas": "2.2.3",
+    "numpy": "2.1.3",
+    "sklearn": "1.6.1",
+    "xgboost": "3.4.1"
+  },
+  "training_parity": "User-verified configuration; script cannot independently prove notebook equivalence"
+}
