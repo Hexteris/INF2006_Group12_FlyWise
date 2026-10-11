@@ -54,4 +54,3 @@ Test procedures, actual outcomes and supporting evidence are documented in the p
 - AI tools were used subject to the applicable terms of their respective providers.
 - Open-source dependencies are subject to their respective licences.
 - Aviationstack data access and use are subject to the applicable API terms.
-- The FlyWise project code is licensed under the MIT License, as specified in the repository's licence file.
